@@ -1,109 +1,651 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Micro Audio Cropper</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <style>
-    :root { color-scheme: light dark; }
-    body { font-family: system-ui, sans-serif; margin: 2rem; line-height: 1.4; }
-    h1   { margin-top: 0; font-size: 1.8rem; }
-    #wave { width: 100%; height: 160px; border: 1px solid #888; margin-block: 1rem; }
-    button, input[type="file"] {
-      padding: .6rem 1.2rem; font-size: 1rem; border-radius: .4rem;
-      border: 1px solid #666; background: var(--bg, #2b2b2b); color: var(--fg, #fafafa);
-    }
-    a#downloadLink { display: inline-block; margin-left: 1rem; }
-    [disabled] { opacity: .4; cursor: not-allowed; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Cropper</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        
+        .container {
+            background: #2d2d2d;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #4CAF50;
+        }
+        
+        .upload-area {
+            border: 2px dashed #555;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .upload-area:hover {
+            border-color: #4CAF50;
+            background: rgba(76, 175, 80, 0.1);
+        }
+        
+        .upload-area.dragover {
+            border-color: #4CAF50;
+            background: rgba(76, 175, 80, 0.2);
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        .upload-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s ease;
+        }
+        
+        .upload-btn:hover {
+            background: #45a049;
+        }
+        
+        .waveform-container {
+            margin: 20px 0;
+            background: #333;
+            border-radius: 8px;
+            padding: 20px;
+            display: none;
+        }
+        
+        .waveform {
+            height: 200px;
+            background: #444;
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+        
+        .waveform canvas {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .selection {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            background: rgba(76, 175, 80, 0.3);
+            border: 2px solid #4CAF50;
+            pointer-events: none;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-primary {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            background: #45a049;
+        }
+        
+        .btn-secondary {
+            background: #666;
+            color: white;
+        }
+        
+        .btn-secondary:hover:not(:disabled) {
+            background: #777;
+        }
+        
+        .info {
+            margin-top: 15px;
+            padding: 10px;
+            background: #444;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .progress {
+            margin-top: 10px;
+            height: 4px;
+            background: #555;
+            border-radius: 2px;
+            overflow: hidden;
+            display: none;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: #4CAF50;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+    </style>
 </head>
 <body>
-  <h1>Micro Audio Cropper</h1>
+    <div class="container">
+        <h1>🎵 Audio Cropper</h1>
+        
+        <div class="upload-area" id="uploadArea">
+            <p>Drag & drop an audio file here or click to browse</p>
+            <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                Choose Audio File
+            </button>
+            <input type="file" id="fileInput" accept="audio/*">
+        </div>
+        
+        <div class="waveform-container" id="waveformContainer">
+            <div class="waveform" id="waveform">
+                <canvas id="waveformCanvas"></canvas>
+                <div class="selection" id="selection" style="display: none;"></div>
+            </div>
+            
+            <div class="controls">
+                <button class="btn btn-primary" id="playBtn" disabled>▶️ Play</button>
+                <button class="btn btn-secondary" id="pauseBtn" disabled>⏸️ Pause</button>
+                <button class="btn btn-secondary" id="stopBtn" disabled>⏹️ Stop</button>
+                <button class="btn btn-primary" id="cropBtn" disabled>✂️ Crop Selection</button>
+            </div>
+            
+            <div class="info" id="info">
+                <div>Duration: <span id="duration">--:--</span></div>
+                <div>Selection: <span id="selectionInfo">No selection</span></div>
+            </div>
+            
+            <div class="progress" id="progress">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+        </div>
+    </div>
 
-  <input id="fileInput" type="file" accept="audio/*">
-  <div id="wave"></div>
-
-  <button id="cropBtn" disabled>Crop & Download</button>
-  <a id="downloadLink"></a>
-
-  <script type="module">
-    import WaveSurfer from
-      'https://cdn.jsdelivr.net/npm/wavesurfer.js@7.9.8/dist/wavesurfer.esm.js';
-    import RegionsPlugin from
-      'https://cdn.jsdelivr.net/npm/wavesurfer.js@7.9.8/dist/plugins/regions.esm.js';
-    import { FFmpeg } from
-      'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/+esm';
-    import { fetchFile } from
-      'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/+esm';
-
-    // ---------- ffmpeg core URLs ----------
-    const coreVer  = '0.12.15';          // keep ffmpeg/core in sync with ffmpeg/ffmpeg
-    const coreBase = `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${coreVer}/dist`;
-    const coreJS   = `${coreBase}/ffmpeg-core.js`;
-    const coreWASM = `${coreBase}/ffmpeg-core.wasm`;
-
-    /* ---------- WaveSurfer setup ---------- */
-    const wavesurfer = WaveSurfer.create({
-      container: '#wave',
-      waveColor: '#4f9',
-      progressColor: '#0c6',
-      plugins: [ RegionsPlugin.create() ]
-    });
-
-    /* ---------- File load ---------- */
-    const fileInput = document.getElementById('fileInput');
-    fileInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      wavesurfer.loadBlob(file);
-      wavesurfer.originalFile = file;              // save for later
-      document.getElementById('cropBtn').disabled = true;
-      document.getElementById('downloadLink').textContent = '';
-    });
-
-    /* ---------- Enable region drawing ---------- */
-    wavesurfer.on('ready', () => {
-      wavesurfer.enableDragSelection({ color: 'rgba(0,200,100,.15)' });
-    });
-
-    /* ---------- Keep only one active region ---------- */
-    wavesurfer.on('region-created', (region) => {
-      wavesurfer.regions.clear(region.id);         // remove older ones
-      document.getElementById('cropBtn').disabled = false;
-    });
-
-    /* ---------- Crop button ---------- */
-    document.getElementById('cropBtn').onclick = async () => {
-      const region = Object.values(wavesurfer.regions.list)[0];
-      if (!region) return alert('Draw a selection first');
-
-      const ffmpeg = new FFmpeg();
-      await ffmpeg.load({
-        coreURL: coreJS,
-        wasmURL: coreWASM,
-      });
-
-      const inputName  = 'input';
-      const outputName = 'out.wav';
-      const fileData = await fetchFile(wavesurfer.originalFile);
-      await ffmpeg.writeFile(inputName, fileData);
-
-      const start = region.start.toFixed(3);
-      const dur   = (region.end - region.start).toFixed(3);
-      await ffmpeg.exec([
-        '-ss', start, '-t', dur, '-i', inputName,
-        '-c', 'copy', outputName
-      ]);
-
-      const data = await ffmpeg.readFile(outputName);
-      const blob = new Blob([data.buffer], { type: 'audio/wav' });
-
-      const url  = URL.createObjectURL(blob);
-      const link = document.getElementById('downloadLink');
-      link.href        = url;
-      link.download    = 'trim.wav';
-      link.textContent = 'Download trim.wav';
-    };
-  </script>
+    <script>
+        class AudioCropper {
+            constructor() {
+                this.audioContext = null;
+                this.audioBuffer = null;
+                this.source = null;
+                this.isPlaying = false;
+                this.startTime = 0;
+                this.pauseTime = 0;
+                this.selection = { start: 0, end: 0 };
+                this.waveformData = null;
+                this.isDragging = false;
+                this.originalFile = null;
+                
+                this.initializeElements();
+                this.setupEventListeners();
+                this.initializeAudioContext();
+            }
+            
+            initializeElements() {
+                this.uploadArea = document.getElementById('uploadArea');
+                this.fileInput = document.getElementById('fileInput');
+                this.waveformContainer = document.getElementById('waveformContainer');
+                this.waveform = document.getElementById('waveform');
+                this.canvas = document.getElementById('waveformCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.selectionDiv = document.getElementById('selection');
+                this.playBtn = document.getElementById('playBtn');
+                this.pauseBtn = document.getElementById('pauseBtn');
+                this.stopBtn = document.getElementById('stopBtn');
+                this.cropBtn = document.getElementById('cropBtn');
+                this.durationSpan = document.getElementById('duration');
+                this.selectionInfo = document.getElementById('selectionInfo');
+                this.progress = document.getElementById('progress');
+                this.progressBar = document.getElementById('progressBar');
+            }
+            
+            setupEventListeners() {
+                // File upload
+                this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
+                
+                // Drag and drop
+                this.uploadArea.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    this.uploadArea.classList.add('dragover');
+                });
+                
+                this.uploadArea.addEventListener('dragleave', () => {
+                    this.uploadArea.classList.remove('dragover');
+                });
+                
+                this.uploadArea.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    this.uploadArea.classList.remove('dragover');
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0) {
+                        this.handleFile(files[0]);
+                    }
+                });
+                
+                // Waveform interaction
+                this.waveform.addEventListener('mousedown', (e) => this.startSelection(e));
+                this.waveform.addEventListener('mousemove', (e) => this.updateSelection(e));
+                this.waveform.addEventListener('mouseup', () => this.endSelection());
+                this.waveform.addEventListener('mouseleave', () => this.endSelection());
+                
+                // Controls
+                this.playBtn.addEventListener('click', () => this.play());
+                this.pauseBtn.addEventListener('click', () => this.pause());
+                this.stopBtn.addEventListener('click', () => this.stop());
+                this.cropBtn.addEventListener('click', () => this.cropAudio());
+                
+                // Resize
+                window.addEventListener('resize', () => this.resizeCanvas());
+            }
+            
+            async initializeAudioContext() {
+                try {
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                } catch (error) {
+                    console.error('Audio context not supported:', error);
+                }
+            }
+            
+            handleFileSelect(event) {
+                const file = event.target.files[0];
+                if (file) {
+                    this.handleFile(file);
+                }
+            }
+            
+            async handleFile(file) {
+                if (!file.type.startsWith('audio/')) {
+                    alert('Please select an audio file');
+                    return;
+                }
+                
+                this.originalFile = file;
+                this.progress.style.display = 'block';
+                this.updateProgress(0);
+                
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    this.updateProgress(50);
+                    
+                    this.audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+                    this.updateProgress(75);
+                    
+                    this.generateWaveform();
+                    this.updateProgress(100);
+                    
+                    this.waveformContainer.style.display = 'block';
+                    this.updateDuration();
+                    this.enableControls();
+                    
+                    setTimeout(() => {
+                        this.progress.style.display = 'none';
+                    }, 500);
+                    
+                } catch (error) {
+                    console.error('Error processing audio file:', error);
+                    alert('Error processing audio file. Please try another file.');
+                    this.progress.style.display = 'none';
+                }
+            }
+            
+            updateProgress(percent) {
+                this.progressBar.style.width = percent + '%';
+            }
+            
+            generateWaveform() {
+                const channelData = this.audioBuffer.getChannelData(0);
+                const samples = Math.floor(channelData.length / 1000);
+                this.waveformData = [];
+                
+                for (let i = 0; i < 1000; i++) {
+                    const start = Math.floor(i * samples);
+                    const end = Math.floor((i + 1) * samples);
+                    let max = 0;
+                    
+                    for (let j = start; j < end; j++) {
+                        const sample = Math.abs(channelData[j]);
+                        if (sample > max) max = sample;
+                    }
+                    
+                    this.waveformData.push(max);
+                }
+                
+                this.resizeCanvas();
+                this.drawWaveform();
+            }
+            
+            resizeCanvas() {
+                if (!this.canvas) return;
+                
+                const rect = this.waveform.getBoundingClientRect();
+                this.canvas.width = rect.width;
+                this.canvas.height = rect.height;
+                this.canvas.style.width = rect.width + 'px';
+                this.canvas.style.height = rect.height + 'px';
+                
+                if (this.waveformData) {
+                    this.drawWaveform();
+                }
+            }
+            
+            drawWaveform() {
+                const width = this.canvas.width;
+                const height = this.canvas.height;
+                const barWidth = width / this.waveformData.length;
+                
+                this.ctx.clearRect(0, 0, width, height);
+                
+                // Draw waveform
+                this.ctx.fillStyle = '#4CAF50';
+                
+                for (let i = 0; i < this.waveformData.length; i++) {
+                    const barHeight = this.waveformData[i] * height * 0.8;
+                    const x = i * barWidth;
+                    const y = (height - barHeight) / 2;
+                    
+                    // Ensure minimum bar height for visibility
+                    const minHeight = Math.max(1, barHeight);
+                    
+                    this.ctx.fillRect(x, y, Math.max(1, barWidth - 1), minHeight);
+                }
+                
+                // Draw playback progress line
+                this.drawProgressLine();
+            }
+            
+            drawProgressLine() {
+                if (!this.isPlaying || !this.audioBuffer) return;
+                
+                const currentTime = this.audioContext.currentTime - this.startTime + this.pauseTime;
+                const progress = Math.min(currentTime / this.audioBuffer.duration, 1);
+                const x = progress * this.canvas.width;
+                
+                this.ctx.strokeStyle = '#FF6B6B';
+                this.ctx.lineWidth = 2;
+                this.ctx.beginPath();
+                this.ctx.moveTo(x, 0);
+                this.ctx.lineTo(x, this.canvas.height);
+                this.ctx.stroke();
+            }
+            
+            startSelection(event) {
+                this.isDragging = true;
+                const rect = this.waveform.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const percent = x / rect.width;
+                this.selection.start = percent * this.audioBuffer.duration;
+                this.selection.end = this.selection.start;
+                this.updateSelectionDisplay();
+            }
+            
+            updateSelection(event) {
+                if (!this.isDragging) return;
+                
+                const rect = this.waveform.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const percent = Math.max(0, Math.min(1, x / rect.width));
+                this.selection.end = percent * this.audioBuffer.duration;
+                this.updateSelectionDisplay();
+            }
+            
+            endSelection() {
+                this.isDragging = false;
+                if (this.selection.start > this.selection.end) {
+                    [this.selection.start, this.selection.end] = [this.selection.end, this.selection.start];
+                }
+                this.updateSelectionInfo();
+                this.cropBtn.disabled = this.selection.start === this.selection.end;
+            }
+            
+            updateSelectionDisplay() {
+                const duration = this.audioBuffer.duration;
+                const startPercent = (this.selection.start / duration) * 100;
+                const endPercent = (this.selection.end / duration) * 100;
+                
+                this.selectionDiv.style.left = Math.min(startPercent, endPercent) + '%';
+                this.selectionDiv.style.width = Math.abs(endPercent - startPercent) + '%';
+                this.selectionDiv.style.display = 'block';
+            }
+            
+            updateSelectionInfo() {
+                if (this.selection.start === this.selection.end) {
+                    this.selectionInfo.textContent = 'No selection';
+                    return;
+                }
+                
+                const start = this.formatTime(this.selection.start);
+                const end = this.formatTime(this.selection.end);
+                const duration = this.formatTime(Math.abs(this.selection.end - this.selection.start));
+                this.selectionInfo.textContent = `${start} - ${end} (${duration})`;
+            }
+            
+            updateDuration() {
+                this.durationSpan.textContent = this.formatTime(this.audioBuffer.duration);
+            }
+            
+            formatTime(seconds) {
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                return `${mins}:${secs.toString().padStart(2, '0')}`;
+            }
+            
+            enableControls() {
+                this.playBtn.disabled = false;
+                this.pauseBtn.disabled = false;
+                this.stopBtn.disabled = false;
+            }
+            
+            async play() {
+                if (this.isPlaying) return;
+                
+                this.source = this.audioContext.createBufferSource();
+                this.source.buffer = this.audioBuffer;
+                this.source.connect(this.audioContext.destination);
+                
+                const startTime = this.pauseTime || 0;
+                this.source.start(0, startTime);
+                this.startTime = this.audioContext.currentTime - startTime;
+                this.isPlaying = true;
+                
+                this.playBtn.textContent = '⏸️ Playing...';
+                this.pauseBtn.disabled = false;
+                
+                // Start animation loop for progress line
+                this.animateProgress();
+                
+                // Auto-stop when audio ends
+                this.source.onended = () => {
+                    if (this.isPlaying) {
+                        this.stop();
+                    }
+                };
+            }
+            
+            animateProgress() {
+                if (!this.isPlaying) return;
+                
+                this.drawWaveform();
+                requestAnimationFrame(() => this.animateProgress());
+            }
+            
+            pause() {
+                if (!this.isPlaying) return;
+                
+                this.source.stop();
+                this.pauseTime = this.audioContext.currentTime - this.startTime;
+                this.isPlaying = false;
+                this.playBtn.textContent = '▶️ Play';
+                this.pauseBtn.disabled = true;
+                
+                // Redraw waveform without progress line
+                this.drawWaveform();
+            }
+            
+            stop() {
+                if (this.source) {
+                    this.source.stop();
+                }
+                this.isPlaying = false;
+                this.pauseTime = 0;
+                this.playBtn.textContent = '▶️ Play';
+                this.pauseBtn.disabled = true;
+                
+                // Redraw waveform without progress line
+                this.drawWaveform();
+            }
+            
+            async cropAudio() {
+                if (this.selection.start === this.selection.end) {
+                    alert('Please select a portion of the audio to crop');
+                    return;
+                }
+                
+                try {
+                    const start = Math.min(this.selection.start, this.selection.end);
+                    const end = Math.max(this.selection.start, this.selection.end);
+                    
+                    // Show progress
+                    this.cropBtn.textContent = '🔄 Processing...';
+                    this.cropBtn.disabled = true;
+                    
+                    // Create new audio buffer with selected portion
+                    const sampleRate = this.audioBuffer.sampleRate;
+                    const channels = this.audioBuffer.numberOfChannels;
+                    const startFrame = Math.floor(start * sampleRate);
+                    const endFrame = Math.floor(end * sampleRate);
+                    const frameCount = endFrame - startFrame;
+                    
+                    const newBuffer = this.audioContext.createBuffer(channels, frameCount, sampleRate);
+                    
+                    // Copy audio data
+                    for (let channel = 0; channel < channels; channel++) {
+                        const oldData = this.audioBuffer.getChannelData(channel);
+                        const newData = newBuffer.getChannelData(channel);
+                        
+                        for (let i = 0; i < frameCount; i++) {
+                            newData[i] = oldData[startFrame + i] || 0;
+                        }
+                    }
+                    
+                    // Convert to WAV
+                    const wavArrayBuffer = this.audioBufferToWav(newBuffer);
+                    const blob = new Blob([wavArrayBuffer], { type: 'audio/wav' });
+                    
+                    // Create download link
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `cropped_audio_${start.toFixed(1)}s-${end.toFixed(1)}s.wav`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    
+                    // Cleanup
+                    setTimeout(() => URL.revokeObjectURL(url), 100);
+                    
+                    this.cropBtn.textContent = '✂️ Crop Selection';
+                    this.cropBtn.disabled = false;
+                    
+                    console.log(`Cropped audio: ${start.toFixed(2)}s to ${end.toFixed(2)}s`);
+                    
+                } catch (error) {
+                    console.error('Error cropping audio:', error);
+                    alert('Error cropping audio. Please try again.');
+                    this.cropBtn.textContent = '✂️ Crop Selection';
+                    this.cropBtn.disabled = false;
+                }
+            }
+            
+            audioBufferToWav(buffer) {
+                const length = buffer.length;
+                const numberOfChannels = buffer.numberOfChannels;
+                const sampleRate = buffer.sampleRate;
+                const bitsPerSample = 16;
+                const bytesPerSample = bitsPerSample / 8;
+                const blockAlign = numberOfChannels * bytesPerSample;
+                const byteRate = sampleRate * blockAlign;
+                const dataSize = length * blockAlign;
+                const fileSize = 44 + dataSize;
+                
+                const arrayBuffer = new ArrayBuffer(fileSize);
+                const view = new DataView(arrayBuffer);
+                
+                // Helper function to write string to DataView
+                const writeString = (offset, string) => {
+                    for (let i = 0; i < string.length; i++) {
+                        view.setUint8(offset + i, string.charCodeAt(i));
+                    }
+                };
+                
+                // Write WAV header
+                writeString(0, 'RIFF');                          // ChunkID
+                view.setUint32(4, fileSize - 8, true);          // ChunkSize
+                writeString(8, 'WAVE');                          // Format
+                writeString(12, 'fmt ');                         // Subchunk1ID
+                view.setUint32(16, 16, true);                   // Subchunk1Size (PCM)
+                view.setUint16(20, 1, true);                    // AudioFormat (PCM)
+                view.setUint16(22, numberOfChannels, true);     // NumChannels
+                view.setUint32(24, sampleRate, true);           // SampleRate
+                view.setUint32(28, byteRate, true);             // ByteRate
+                view.setUint16(32, blockAlign, true);           // BlockAlign
+                view.setUint16(34, bitsPerSample, true);        // BitsPerSample
+                writeString(36, 'data');                         // Subchunk2ID
+                view.setUint32(40, dataSize, true);             // Subchunk2Size
+                
+                // Write audio data
+                let offset = 44;
+                for (let i = 0; i < length; i++) {
+                    for (let channel = 0; channel < numberOfChannels; channel++) {
+                        // Convert float32 (-1 to 1) to int16 (-32768 to 32767)
+                        const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]));
+                        const int16Sample = Math.round(sample * 32767);
+                        view.setInt16(offset, int16Sample, true);
+                        offset += 2;
+                    }
+                }
+                
+                return arrayBuffer;
+            }
+        }
+        
+        // Initialize the audio cropper when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new AudioCropper();
+        });
+    </script>
 </body>
 </html>
