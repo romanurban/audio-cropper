@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Micro Audio Cropper</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, sans-serif; margin: 2rem; line-height: 1.4; }
+    h1   { margin-top: 0; font-size: 1.8rem; }
+    #wave { width: 100%; height: 160px; border: 1px solid #888; margin-block: 1rem; }
+    button, input[type="file"] {
+      padding: .6rem 1.2rem; font-size: 1rem; border-radius: .4rem;
+      border: 1px solid #666; background: var(--bg, #2b2b2b); color: var(--fg, #fafafa);
+    }
+    a#downloadLink { display: inline-block; margin-left: 1rem; }
+    [disabled] { opacity: .4; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <h1>Micro Audio Cropper</h1>
+
+  <input id="fileInput" type="file" accept="audio/*">
+  <div id="wave"></div>
+
+  <button id="cropBtn" disabled>Crop & Download</button>
+  <a id="downloadLink"></a>
+
+  <script type="module">
+    import WaveSurfer from
+      'https://cdn.jsdelivr.net/npm/wavesurfer.js@7.9.8/dist/wavesurfer.esm.js';
+    import RegionsPlugin from
+      'https://cdn.jsdelivr.net/npm/wavesurfer.js@7.9.8/dist/plugins/regions.esm.js';
+    import { createFFmpeg, fetchFile } from
+      'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.9/dist/ffmpeg.min.js';
+
+    /* ---------- WaveSurfer setup ---------- */
+    const wavesurfer = WaveSurfer.create({
+      container: '#wave',
+      waveColor: '#4f9',
+      progressColor: '#0c6',
+      plugins: [ RegionsPlugin.create() ]
+    });
+
+    /* ---------- File load ---------- */
+    const fileInput = document.getElementById('fileInput');
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      wavesurfer.loadBlob(file);
+      wavesurfer.originalFile = file;              // save for later
+      document.getElementById('cropBtn').disabled = true;
+      document.getElementById('downloadLink').textContent = '';
+    });
+
+    /* ---------- Enable region drawing ---------- */
+    wavesurfer.on('ready', () => {
+      wavesurfer.enableDragSelection({ color: 'rgba(0,200,100,.15)' });
+    });
+
+    /* ---------- Keep only one active region ---------- */
+    wavesurfer.on('region-created', (region) => {
+      wavesurfer.regions.clear(region.id);         // remove older ones
+      document.getElementById('cropBtn').disabled = false;
+    });
+
+    /* ---------- Crop button ---------- */
+    document.getElementById('cropBtn').onclick = async () => {
+      const region = Object.values(wavesurfer.regions.list)[0];
+      if (!region) return alert('Draw a selection first');
+
+      const ffmpeg = createFFmpeg({ log: false });
+      await ffmpeg.load();
+
+      const inputName  = 'input';
+      const outputName = 'out.wav';
+      const fileData = await fetchFile(wavesurfer.originalFile);
+      ffmpeg.FS('writeFile', inputName, fileData);
+
+      const start = region.start.toFixed(3);
+      const dur   = (region.end - region.start).toFixed(3);
+      await ffmpeg.run('-ss', start, '-t', dur, '-i', inputName,
+                       '-c', 'copy', outputName);
+
+      const data = ffmpeg.FS('readFile', outputName);
+      const blob = new Blob([data.buffer], { type: 'audio/wav' });
+
+      const url  = URL.createObjectURL(blob);
+      const link = document.getElementById('downloadLink');
+      link.href        = url;
+      link.download    = 'trim.wav';
+      link.textContent = 'Download trim.wav';
+    };
+  </script>
+</body>
+</html>
