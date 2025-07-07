@@ -1,23 +1,22 @@
 # Micro Audio Cropper
 
-A 100 % client-side tool (WaveSurfer + ffmpeg.wasm) that lets you
-upload an audio file, visually select a region, and download the trimmed
-segment—no server, no upload, no privacy worries.
+A lightweight client-side tool that lets you trim audio directly in the browser. It uses vanilla JavaScript and the Web Audio API to display a waveform, allow selection, and export the chosen segment as a WAV file—no server interaction required.
 
-**Usage**
+## Usage
 
-1. Drop a WAV, MP3, or OGG file.
-2. Drag to select.
-3. Press **Crop & Download**.
+1. Open `index.html` in a modern browser.
+2. Drag & drop a WAV, MP3 or OGG file onto the page (or click **Choose Audio File**).
+3. Drag on the waveform to select a portion of the audio.
+4. Use the playback controls to preview your selection.
+5. Click **Crop Selection** to download the trimmed audio.
 
-Everything runs inside the browser; the audio never leaves your machine.
+All processing happens locally; your audio never leaves your device.
 
----
+## Built With
 
-### Built With
+* [Web Audio API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
+* Vanilla JavaScript
 
-* [WaveSurfer 7.9.8](https://wavesurfer-js.org/)
-* [ffmpeg.wasm 0.12.15](https://github.com/ffmpegwasm/ffmpeg.wasm)
+## License
 
-### License
-
+No license file is included.
