@@ -31,8 +31,10 @@
       'https://cdn.jsdelivr.net/npm/wavesurfer.js@7.9.8/dist/wavesurfer.esm.js';
     import RegionsPlugin from
       'https://cdn.jsdelivr.net/npm/wavesurfer.js@7.9.8/dist/plugins/regions.esm.js';
-    import { createFFmpeg, fetchFile } from
+    import { FFmpeg } from
       'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/+esm';
+    import { fetchFile } from
+      'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/+esm';
 
     // ---------- ffmpeg core URLs ----------
     const coreVer  = '0.12.15';          // keep ffmpeg/core in sync with ffmpeg/ffmpeg
@@ -75,24 +77,25 @@
       const region = Object.values(wavesurfer.regions.list)[0];
       if (!region) return alert('Draw a selection first');
 
-      const ffmpeg = createFFmpeg({
-        log: false,
-        corePath: coreJS,
-        wasmPath: coreWASM,
+      const ffmpeg = new FFmpeg();
+      await ffmpeg.load({
+        coreURL: coreJS,
+        wasmURL: coreWASM,
       });
-      await ffmpeg.load();
 
       const inputName  = 'input';
       const outputName = 'out.wav';
       const fileData = await fetchFile(wavesurfer.originalFile);
-      ffmpeg.FS('writeFile', inputName, fileData);
+      await ffmpeg.writeFile(inputName, fileData);
 
       const start = region.start.toFixed(3);
       const dur   = (region.end - region.start).toFixed(3);
-      await ffmpeg.run('-ss', start, '-t', dur, '-i', inputName,
-                       '-c', 'copy', outputName);
+      await ffmpeg.exec([
+        '-ss', start, '-t', dur, '-i', inputName,
+        '-c', 'copy', outputName
+      ]);
 
-      const data = ffmpeg.FS('readFile', outputName);
+      const data = await ffmpeg.readFile(outputName);
       const blob = new Blob([data.buffer], { type: 'audio/wav' });
 
       const url  = URL.createObjectURL(blob);
