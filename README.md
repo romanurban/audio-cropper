@@ -17,7 +17,7 @@ Everything runs inside the browser; the audio never leaves your machine.
 ### Built With
 
 * [WaveSurfer 7.9.8](https://wavesurfer-js.org/)
-* [ffmpeg.wasm 0.12.9](https://github.com/ffmpegwasm/ffmpeg.wasm)
+* [ffmpeg.wasm 0.12.15](https://github.com/ffmpegwasm/ffmpeg.wasm)
 
 ### License
 
