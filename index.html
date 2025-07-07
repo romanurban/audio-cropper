@@ -34,6 +34,12 @@
     import { createFFmpeg, fetchFile } from
       'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.9/dist/ffmpeg.min.js';
 
+    // ---------- ffmpeg core URLs ----------
+    const coreVer  = '0.12.10';          // keep ffmpeg/core in sync with ffmpeg/ffmpeg
+    const coreBase = `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${coreVer}/dist`;
+    const coreJS   = `${coreBase}/ffmpeg-core.js`;
+    const coreWASM = `${coreBase}/ffmpeg-core.wasm`;
+
     /* ---------- WaveSurfer setup ---------- */
     const wavesurfer = WaveSurfer.create({
       container: '#wave',
@@ -69,7 +75,11 @@
       const region = Object.values(wavesurfer.regions.list)[0];
       if (!region) return alert('Draw a selection first');
 
-      const ffmpeg = createFFmpeg({ log: false });
+      const ffmpeg = createFFmpeg({
+        log: false,
+        corePath: coreJS,
+        wasmPath: coreWASM,
+      });
       await ffmpeg.load();
 
       const inputName  = 'input';
