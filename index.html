@@ -203,8 +203,8 @@
                 this.audioBuffer = null;
                 this.source = null;
                 this.isPlaying = false;
-                this.startTime = 0;
-                this.pauseTime = 0;
+                this.playStartTime = 0;
+                this.pausedAtTime = 0;
                 this.selection = { start: 0, end: 0 };
                 this.waveformData = null;
                 this.isDragging = false;
@@ -390,7 +390,8 @@
             drawProgressLine() {
                 if (!this.isPlaying || !this.audioBuffer) return;
                 
-                const currentTime = this.audioContext.currentTime - this.startTime + this.pauseTime;
+                // Calculate current playback position
+                const currentTime = this.getCurrentPlaybackTime();
                 const progress = Math.min(currentTime / this.audioBuffer.duration, 1);
                 const x = progress * this.canvas.width;
                 
@@ -400,6 +401,11 @@
                 this.ctx.moveTo(x, 0);
                 this.ctx.lineTo(x, this.canvas.height);
                 this.ctx.stroke();
+            }
+            
+            getCurrentPlaybackTime() {
+                if (!this.isPlaying) return this.pausedAtTime;
+                return this.pausedAtTime + (this.audioContext.currentTime - this.playStartTime);
             }
             
             startSelection(event) {
@@ -476,9 +482,9 @@
                 this.source.buffer = this.audioBuffer;
                 this.source.connect(this.audioContext.destination);
                 
-                const startTime = this.pauseTime || 0;
-                this.source.start(0, startTime);
-                this.startTime = this.audioContext.currentTime - startTime;
+                // Start from current paused position
+                this.source.start(0, this.pausedAtTime);
+                this.playStartTime = this.audioContext.currentTime;
                 this.isPlaying = true;
                 
                 this.playBtn.textContent = '⏸️ Playing...';
@@ -506,7 +512,7 @@
                 if (!this.isPlaying) return;
                 
                 this.source.stop();
-                this.pauseTime = this.audioContext.currentTime - this.startTime;
+                this.pausedAtTime = this.getCurrentPlaybackTime();
                 this.isPlaying = false;
                 this.playBtn.textContent = '▶️ Play';
                 this.pauseBtn.disabled = true;
@@ -520,7 +526,7 @@
                     this.source.stop();
                 }
                 this.isPlaying = false;
-                this.pauseTime = 0;
+                this.pausedAtTime = 0;
                 this.playBtn.textContent = '▶️ Play';
                 this.pauseBtn.disabled = true;
                 
