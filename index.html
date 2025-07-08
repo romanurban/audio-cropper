@@ -209,10 +209,10 @@
                 this.waveformData = null;
                 this.isDragging = false;
                 this.originalFile = null;
+                this.isInitialized = false;
                 
                 this.initializeElements();
                 this.setupEventListeners();
-                this.initializeAudioContext();
             }
             
             initializeElements() {
@@ -273,10 +273,21 @@
             }
             
             async initializeAudioContext() {
+                if (this.audioContext) return;
+                
                 try {
                     this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    
+                    // Handle suspended state
+                    if (this.audioContext.state === 'suspended') {
+                        await this.audioContext.resume();
+                    }
+                    
+                    this.isInitialized = true;
+                    console.log('AudioContext initialized:', this.audioContext.state);
                 } catch (error) {
                     console.error('Audio context not supported:', error);
+                    throw error;
                 }
             }
             
@@ -298,22 +309,31 @@
                 this.updateProgress(0);
                 
                 try {
+                    // Initialize audio context first
+                    await this.initializeAudioContext();
+                    this.updateProgress(20);
+                    
                     const arrayBuffer = await file.arrayBuffer();
                     this.updateProgress(50);
                     
                     this.audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
                     this.updateProgress(75);
                     
-                    this.generateWaveform();
-                    this.updateProgress(100);
-                    
+                    // Show container first, then generate waveform
                     this.waveformContainer.style.display = 'block';
-                    this.updateDuration();
-                    this.enableControls();
                     
-                    setTimeout(() => {
-                        this.progress.style.display = 'none';
-                    }, 500);
+                    // Use requestAnimationFrame to ensure DOM is updated
+                    requestAnimationFrame(() => {
+                        this.generateWaveform();
+                        this.updateProgress(100);
+                        
+                        this.updateDuration();
+                        this.enableControls();
+                        
+                        setTimeout(() => {
+                            this.progress.style.display = 'none';
+                        }, 500);
+                    });
                     
                 } catch (error) {
                     console.error('Error processing audio file:', error);
@@ -344,29 +364,55 @@
                     this.waveformData.push(max);
                 }
                 
+                // Force canvas resize and redraw
                 this.resizeCanvas();
-                this.drawWaveform();
+                
+                // Use another requestAnimationFrame to ensure canvas is properly sized
+                requestAnimationFrame(() => {
+                    this.drawWaveform();
+                });
             }
             
             resizeCanvas() {
-                if (!this.canvas) return;
+                if (!this.canvas || !this.waveform) return;
                 
+                // Get actual dimensions
                 const rect = this.waveform.getBoundingClientRect();
+                
+                // Ensure we have valid dimensions
+                if (rect.width <= 0 || rect.height <= 0) {
+                    // Try again after a short delay
+                    setTimeout(() => this.resizeCanvas(), 10);
+                    return;
+                }
+                
+                // Set canvas size
                 this.canvas.width = rect.width;
                 this.canvas.height = rect.height;
+                
+                // Force style update
                 this.canvas.style.width = rect.width + 'px';
                 this.canvas.style.height = rect.height + 'px';
                 
+                console.log('Canvas resized to:', rect.width, 'x', rect.height);
+                
+                // Redraw if we have waveform data
                 if (this.waveformData) {
                     this.drawWaveform();
                 }
             }
             
             drawWaveform() {
+                if (!this.waveformData || !this.canvas || this.canvas.width <= 0 || this.canvas.height <= 0) {
+                    console.warn('Cannot draw waveform - invalid state');
+                    return;
+                }
+                
                 const width = this.canvas.width;
                 const height = this.canvas.height;
                 const barWidth = width / this.waveformData.length;
                 
+                // Clear canvas
                 this.ctx.clearRect(0, 0, width, height);
                 
                 // Draw waveform
@@ -378,10 +424,13 @@
                     const y = (height - barHeight) / 2;
                     
                     // Ensure minimum bar height for visibility
-                    const minHeight = Math.max(1, barHeight);
+                    const minHeight = Math.max(2, barHeight);
+                    const actualBarWidth = Math.max(1, barWidth - 0.5);
                     
-                    this.ctx.fillRect(x, y, Math.max(1, barWidth - 1), minHeight);
+                    this.ctx.fillRect(x, y, actualBarWidth, minHeight);
                 }
+                
+                console.log('Waveform drawn successfully');
                 
                 // Draw playback progress line
                 this.drawProgressLine();
@@ -477,6 +526,11 @@
             
             async play() {
                 if (this.isPlaying) return;
+                
+                // Resume audio context if suspended
+                if (this.audioContext.state === 'suspended') {
+                    await this.audioContext.resume();
+                }
                 
                 this.source = this.audioContext.createBufferSource();
                 this.source.buffer = this.audioBuffer;
