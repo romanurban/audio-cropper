@@ -520,43 +520,131 @@
                 this.drawWaveform();
             }
             
+            // Common deletion function that actually removes audio data
+            deleteAudioRange(startTime, endTime) {
+                if (!this.audioBuffer) return;
+                
+                const sampleRate = this.audioBuffer.sampleRate;
+                const channels = this.audioBuffer.numberOfChannels;
+                
+                // Calculate the samples to remove
+                const startSample = Math.floor(startTime * sampleRate);
+                const endSample = Math.floor(endTime * sampleRate);
+                const samplesToDelete = endSample - startSample;
+                
+                // Create new buffer without the deleted portion
+                const newLength = this.audioBuffer.length - samplesToDelete;
+                const newBuffer = this.audioContext.createBuffer(channels, newLength, sampleRate);
+                
+                // Copy audio data, skipping the deleted range
+                for (let channel = 0; channel < channels; channel++) {
+                    const oldData = this.audioBuffer.getChannelData(channel);
+                    const newData = newBuffer.getChannelData(channel);
+                    
+                    // Copy before deleted range
+                    for (let i = 0; i < startSample; i++) {
+                        newData[i] = oldData[i];
+                    }
+                    
+                    // Copy after deleted range
+                    for (let i = endSample; i < oldData.length; i++) {
+                        newData[i - samplesToDelete] = oldData[i];
+                    }
+                }
+                
+                // Update audio buffer
+                this.audioBuffer = newBuffer;
+                
+                // Update all chunk times that come after the deleted range
+                const deleteDuration = endTime - startTime;
+                this.chunks = this.chunks.map(chunk => {
+                    if (chunk.start >= endTime) {
+                        // Chunk is entirely after deleted range
+                        return {
+                            ...chunk,
+                            start: chunk.start - deleteDuration,
+                            end: chunk.end - deleteDuration
+                        };
+                    } else if (chunk.end <= startTime) {
+                        // Chunk is entirely before deleted range
+                        return chunk;
+                    } else if (chunk.start >= startTime && chunk.end <= endTime) {
+                        // Chunk is entirely within deleted range - mark for removal
+                        return null;
+                    } else if (chunk.start < startTime && chunk.end > endTime) {
+                        // Deletion is within this chunk
+                        return {
+                            ...chunk,
+                            end: chunk.end - deleteDuration
+                        };
+                    } else if (chunk.start < startTime && chunk.end > startTime) {
+                        // Chunk partially overlaps start of deletion
+                        return {
+                            ...chunk,
+                            end: startTime
+                        };
+                    } else if (chunk.start < endTime && chunk.end > endTime) {
+                        // Chunk partially overlaps end of deletion
+                        return {
+                            ...chunk,
+                            start: startTime,
+                            end: chunk.end - deleteDuration
+                        };
+                    }
+                    return chunk;
+                }).filter(chunk => chunk !== null); // Remove deleted chunks
+                
+                // Regenerate waveform data for the new buffer
+                this.generateWaveform();
+                this.updateDuration();
+                this.updateChunkOverlays();
+                this.updateChunkInfo();
+                
+                // Reset playback position if it's in deleted range
+                if (this.pausedAtTime >= startTime && this.pausedAtTime <= endTime) {
+                    this.pausedAtTime = startTime;
+                } else if (this.pausedAtTime > endTime) {
+                    this.pausedAtTime -= deleteDuration;
+                }
+                
+                this.seekPosition = this.pausedAtTime;
+            }
+            
             deleteSelectedChunk() {
                 if (!this.selectedChunk || this.chunks.length <= 1) {
                     alert('Cannot delete chunk - at least one chunk must remain');
                     return;
                 }
                 
-                // Find and remove the selected chunk
-                const chunkIndex = this.chunks.findIndex(chunk => chunk.id === this.selectedChunk.id);
-                if (chunkIndex !== -1) {
-                    this.chunks.splice(chunkIndex, 1);
-                }
+                // Use common deletion function
+                this.deleteAudioRange(this.selectedChunk.start, this.selectedChunk.end);
                 
-                // Clear any selection that might span into deleted area
+                // Clear selection
+                this.selectedChunk = null;
+                this.deleteChunkBtn.disabled = true;
                 this.selection.start = 0;
                 this.selection.end = 0;
                 this.selectionDiv.style.display = 'none';
                 
-                // Deselect chunk
-                this.selectedChunk = null;
-                this.deleteChunkBtn.disabled = true;
-                
-                // Reset playback position to first remaining chunk if current position is invalid
-                const positionInValidChunk = this.chunks.some(chunk => 
-                    this.pausedAtTime >= chunk.start && this.pausedAtTime <= chunk.end
-                );
-                
-                if (!positionInValidChunk && this.chunks.length > 0) {
-                    const firstChunk = [...this.chunks].sort((a, b) => a.start - b.start)[0];
-                    this.pausedAtTime = firstChunk.start;
-                    this.seekPosition = firstChunk.start;
-                }
-                
-                // Update visual representation
-                this.updateChunkOverlays();
-                this.updateChunkInfo();
                 this.updateSelectionInfo();
-                this.drawWaveform();
+            }
+            
+            deleteSelection() {
+                if (!this.selection || this.selection.start === this.selection.end) return;
+                
+                const startTime = Math.min(this.selection.start, this.selection.end);
+                const endTime = Math.max(this.selection.start, this.selection.end);
+                
+                // Use common deletion function
+                this.deleteAudioRange(startTime, endTime);
+                
+                // Clear selection
+                this.selection.start = 0;
+                this.selection.end = 0;
+                this.selectionDiv.style.display = 'none';
+                this.deleteSelectionBtn.disabled = true;
+                
+                this.updateSelectionInfo();
             }
             
             handleMouseDown(event) {
@@ -1013,27 +1101,6 @@
             getCurrentPlaybackTime() {
                 if (!this.isPlaying) return this.pausedAtTime;
                 return this.pausedAtTime + (this.audioContext.currentTime - this.playStartTime);
-            }
-            
-            handleMouseUp() {
-                if (!this.isDragging) return;
-                
-                if (!this.dragStarted) {
-                    // This was a click, not a drag - seek to position
-                    this.seekToTime(this.initialClickTime);
-                    this.seekPosition = this.initialClickTime;
-                    // Clear selection
-                    this.selection.start = 0;
-                    this.selection.end = 0;
-                    this.selectionDiv.style.display = 'none';
-                    this.updateSelectionInfo();
-                } else {
-                    // This was a drag - finalize selection
-                    this.endSelection();
-                }
-                
-                this.isDragging = false;
-                this.dragStarted = false;
             }
             
             endSelection() {
