@@ -437,9 +437,9 @@
             }
             
             drawProgressLine() {
-                if (!this.isPlaying || !this.audioBuffer) return;
+                if (!this.audioBuffer) return;
                 
-                // Calculate current playback position
+                // Always draw progress line - position depends on state
                 const currentTime = this.getCurrentPlaybackTime();
                 const progress = Math.min(currentTime / this.audioBuffer.duration, 1);
                 const x = progress * this.canvas.width;
@@ -571,7 +571,7 @@
                 this.playBtn.textContent = '▶️ Play';
                 this.pauseBtn.disabled = true;
                 
-                // Redraw waveform without progress line
+                // Redraw waveform with progress line at paused position
                 this.drawWaveform();
             }
             
@@ -580,11 +580,11 @@
                     this.source.stop();
                 }
                 this.isPlaying = false;
-                this.pausedAtTime = 0;
+                this.pausedAtTime = 0; // Reset to beginning
                 this.playBtn.textContent = '▶️ Play';
                 this.pauseBtn.disabled = true;
                 
-                // Redraw waveform without progress line
+                // Redraw waveform with progress line at leftmost position
                 this.drawWaveform();
             }
             
