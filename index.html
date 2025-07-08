@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio Cropper</title>
+    <title>Audio Chunking Editor</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -96,6 +96,27 @@
             pointer-events: none;
         }
         
+        .chunk-overlay {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        
+        .chunk-overlay.selected {
+            background: rgba(255, 107, 107, 0.2);
+            border-color: #FF6B6B;
+            opacity: 1;
+        }
+        
+        .chunk-overlay.hovered {
+            opacity: 1;
+        }
+        
         .controls {
             display: flex;
             gap: 10px;
@@ -135,12 +156,38 @@
             background: #777;
         }
         
+        .btn-danger {
+            background: #f44336;
+            color: white;
+        }
+        
+        .btn-danger:hover:not(:disabled) {
+            background: #da190b;
+        }
+        
+        .btn-warning {
+            background: #ff9800;
+            color: white;
+        }
+        
+        .btn-warning:hover:not(:disabled) {
+            background: #f57c00;
+        }
+        
         .info {
             margin-top: 15px;
             padding: 10px;
             background: #444;
             border-radius: 6px;
             font-size: 14px;
+        }
+        
+        .info .chunk-info {
+            margin-top: 8px;
+            padding: 8px;
+            background: #555;
+            border-radius: 4px;
+            border-left: 3px solid #FF6B6B;
         }
         
         .progress {
@@ -171,7 +218,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>🎵 Audio Cropper</h1>
+        <h1>🎵 Audio Chunking Editor</h1>
         
         <div class="upload-area" id="uploadArea">
             <p>Drag & drop an audio file here or click to browse</p>
@@ -188,20 +235,27 @@
             </div>
             
             <div class="instructions">
-                🎯 <strong>Click</strong> on waveform to seek to position | 🎨 <strong>Drag</strong> to select region for cropping
+                🎯 <strong>Click</strong> on waveform to seek | 🎨 <strong>Drag</strong> to select region | ✂️ <strong>Split</strong> at seek position | 🖱️ <strong>Click chunks</strong> to select them
             </div>
             
             <div class="controls">
                 <button class="btn btn-primary" id="playBtn" disabled>▶️ Play</button>
                 <button class="btn btn-secondary" id="pauseBtn" disabled>⏸️ Pause</button>
                 <button class="btn btn-secondary" id="stopBtn" disabled>⏹️ Stop</button>
-                <button class="btn btn-primary" id="cropBtn" disabled>✂️ Crop Selection</button>
+                <button class="btn btn-warning" id="splitBtn" disabled>✂️ Split at Position</button>
+                <button class="btn btn-primary" id="cropBtn" disabled>📏 Crop Selection</button>
+                <button class="btn btn-danger" id="deleteSelectionBtn" disabled>✂️ Delete Selection</button>
+                <button class="btn btn-danger" id="deleteChunkBtn" disabled>🗑️ Delete Selected Chunk</button>
             </div>
             
             <div class="info" id="info">
                 <div>Duration: <span id="duration">--:--</span></div>
                 <div>Current Time: <span id="currentTime">--:--</span></div>
                 <div>Selection: <span id="selectionInfo">No selection</span></div>
+                <div>Chunks: <span id="chunkCount">1</span></div>
+                <div class="chunk-info" id="chunkInfo" style="display: none;">
+                    <strong>Selected Chunk:</strong> <span id="selectedChunkInfo">None</span>
+                </div>
             </div>
             
             <div class="progress" id="progress">
@@ -211,7 +265,7 @@
     </div>
 
     <script>
-        class AudioCropper {
+        class AudioChunkingEditor {
             constructor() {
                 this.audioContext = null;
                 this.audioBuffer = null;
@@ -225,6 +279,18 @@
                 this.dragStarted = false;
                 this.originalFile = null;
                 this.isInitialized = false;
+                this.seekPosition = 0;
+                
+                // Chunk management
+                this.chunks = [{ start: 0, end: 0, id: 0 }]; // Will be set when audio loads
+                this.selectedChunk = null;
+                this.chunkOverlays = [];
+                this.nextChunkId = 1;
+                
+                // Playback state
+                this.currentlyPlayingChunk = null;
+                this.playingChunks = null;
+                this.playingStartOffset = 0;
                 
                 this.initializeElements();
                 this.setupEventListeners();
@@ -241,10 +307,16 @@
                 this.playBtn = document.getElementById('playBtn');
                 this.pauseBtn = document.getElementById('pauseBtn');
                 this.stopBtn = document.getElementById('stopBtn');
+                this.splitBtn = document.getElementById('splitBtn');
                 this.cropBtn = document.getElementById('cropBtn');
+                this.deleteSelectionBtn = document.getElementById('deleteSelectionBtn');
+                this.deleteChunkBtn = document.getElementById('deleteChunkBtn');
                 this.durationSpan = document.getElementById('duration');
                 this.currentTimeSpan = document.getElementById('currentTime');
                 this.selectionInfo = document.getElementById('selectionInfo');
+                this.chunkCount = document.getElementById('chunkCount');
+                this.chunkInfo = document.getElementById('chunkInfo');
+                this.selectedChunkInfo = document.getElementById('selectedChunkInfo');
                 this.progress = document.getElementById('progress');
                 this.progressBar = document.getElementById('progressBar');
             }
@@ -277,15 +349,214 @@
                 this.waveform.addEventListener('mousemove', (e) => this.handleMouseMove(e));
                 this.waveform.addEventListener('mouseup', () => this.handleMouseUp());
                 this.waveform.addEventListener('mouseleave', () => this.handleMouseUp());
+                this.waveform.addEventListener('click', (e) => this.handleWaveformClick(e));
                 
                 // Controls
                 this.playBtn.addEventListener('click', () => this.play());
                 this.pauseBtn.addEventListener('click', () => this.pause());
                 this.stopBtn.addEventListener('click', () => this.stop());
+                this.splitBtn.addEventListener('click', () => this.splitAtPosition());
                 this.cropBtn.addEventListener('click', () => this.cropAudio());
+                this.deleteSelectionBtn.addEventListener('click', () => this.deleteSelection());
+                this.deleteChunkBtn.addEventListener('click', () => this.deleteSelectedChunk());
                 
                 // Resize
                 window.addEventListener('resize', () => this.resizeCanvas());
+            }
+            
+            handleWaveformClick(event) {
+                // Don't allow chunk selection if there's only one chunk
+                if (this.chunks.length <= 1) {
+                    return;
+                }
+                
+                // Check if click is on a chunk
+                const rect = this.waveform.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                
+                // Calculate which chunk was clicked based on proportional layout
+                const totalChunkDuration = this.chunks.reduce((sum, chunk) => sum + (chunk.end - chunk.start), 0);
+                const gapWidth = 4; // pixels between chunks
+                const totalGaps = Math.max(0, this.chunks.length - 1) * gapWidth;
+                const availableWidth = rect.width - totalGaps;
+                
+                let currentX = 0;
+                let clickedChunk = null;
+                
+                for (const chunk of this.chunks) {
+                    const chunkDuration = chunk.end - chunk.start;
+                    const chunkWidthRatio = chunkDuration / totalChunkDuration;
+                    const chunkWidth = availableWidth * chunkWidthRatio;
+                    
+                    // Check if click is within this chunk's bounds
+                    if (x >= currentX && x <= currentX + chunkWidth) {
+                        clickedChunk = chunk;
+                        break;
+                    }
+                    
+                    // Move to next chunk position (add gap)
+                    currentX += chunkWidth + gapWidth;
+                }
+                
+                if (clickedChunk) {
+                    this.selectChunk(clickedChunk);
+                }
+            }
+            
+            selectChunk(chunk) {
+                this.selectedChunk = chunk;
+                this.updateChunkOverlays();
+                this.updateChunkInfo();
+                this.deleteChunkBtn.disabled = false;
+            }
+            
+            updateChunkOverlays() {
+                // Clear existing overlays
+                this.chunkOverlays.forEach(overlay => overlay.remove());
+                this.chunkOverlays = [];
+                
+                // Only create overlays if there's more than one chunk
+                if (this.chunks.length <= 1) {
+                    return;
+                }
+                
+                // Calculate total duration of all chunks for proportional positioning
+                const totalChunkDuration = this.chunks.reduce((sum, chunk) => sum + (chunk.end - chunk.start), 0);
+                const gapWidth = 4; // pixels between chunks (same as in drawWaveform)
+                const totalGaps = Math.max(0, this.chunks.length - 1) * gapWidth;
+                const waveformWidth = this.waveform.getBoundingClientRect().width;
+                const availableWidth = waveformWidth - totalGaps;
+                
+                let currentX = 0;
+                
+                // Create overlays for each chunk
+                this.chunks.forEach(chunk => {
+                    const overlay = document.createElement('div');
+                    overlay.className = 'chunk-overlay';
+                    
+                    if (this.selectedChunk && chunk.id === this.selectedChunk.id) {
+                        overlay.classList.add('selected');
+                    }
+                    
+                    const chunkDuration = chunk.end - chunk.start;
+                    const chunkWidthRatio = chunkDuration / totalChunkDuration;
+                    const chunkWidthPixels = availableWidth * chunkWidthRatio;
+                    
+                    overlay.style.left = (currentX / waveformWidth * 100) + '%';
+                    overlay.style.width = (chunkWidthPixels / waveformWidth * 100) + '%';
+                    
+                    // Add hover effect
+                    overlay.addEventListener('mouseenter', () => {
+                        if (!overlay.classList.contains('selected')) {
+                            overlay.classList.add('hovered');
+                        }
+                    });
+                    
+                    overlay.addEventListener('mouseleave', () => {
+                        overlay.classList.remove('hovered');
+                    });
+                    
+                    this.waveform.appendChild(overlay);
+                    this.chunkOverlays.push(overlay);
+                    
+                    // Move to next chunk position (add gap)
+                    currentX += chunkWidthPixels + gapWidth;
+                });
+            }
+            
+            updateChunkInfo() {
+                this.chunkCount.textContent = this.chunks.length;
+                
+                if (this.selectedChunk) {
+                    const duration = this.selectedChunk.end - this.selectedChunk.start;
+                    const info = `Chunk ${this.selectedChunk.id + 1} | ${this.formatTime(this.selectedChunk.start)} - ${this.formatTime(this.selectedChunk.end)} | Duration: ${this.formatTime(duration)}`;
+                    this.selectedChunkInfo.textContent = info;
+                    this.chunkInfo.style.display = 'block';
+                } else {
+                    this.chunkInfo.style.display = 'none';
+                }
+            }
+            
+            splitAtPosition() {
+                if (!this.audioBuffer) return;
+                
+                const splitTime = this.seekPosition;
+                
+                // Find the chunk that contains the split position
+                const chunkIndex = this.chunks.findIndex(chunk => 
+                    splitTime > chunk.start && splitTime < chunk.end
+                );
+                
+                if (chunkIndex === -1) {
+                    alert('Split position must be within an existing chunk');
+                    return;
+                }
+                
+                const originalChunk = this.chunks[chunkIndex];
+                
+                // Create two new chunks
+                const leftChunk = {
+                    start: originalChunk.start,
+                    end: splitTime,
+                    id: this.nextChunkId++
+                };
+                
+                const rightChunk = {
+                    start: splitTime,
+                    end: originalChunk.end,
+                    id: this.nextChunkId++
+                };
+                
+                // Replace the original chunk with the two new chunks
+                this.chunks.splice(chunkIndex, 1, leftChunk, rightChunk);
+                
+                // Deselect any selected chunk
+                this.selectedChunk = null;
+                this.deleteChunkBtn.disabled = true;
+                
+                // Update visual representation
+                this.updateChunkOverlays();
+                this.updateChunkInfo();
+                this.drawWaveform();
+            }
+            
+            deleteSelectedChunk() {
+                if (!this.selectedChunk || this.chunks.length <= 1) {
+                    alert('Cannot delete chunk - at least one chunk must remain');
+                    return;
+                }
+                
+                // Find and remove the selected chunk
+                const chunkIndex = this.chunks.findIndex(chunk => chunk.id === this.selectedChunk.id);
+                if (chunkIndex !== -1) {
+                    this.chunks.splice(chunkIndex, 1);
+                }
+                
+                // Clear any selection that might span into deleted area
+                this.selection.start = 0;
+                this.selection.end = 0;
+                this.selectionDiv.style.display = 'none';
+                
+                // Deselect chunk
+                this.selectedChunk = null;
+                this.deleteChunkBtn.disabled = true;
+                
+                // Reset playback position to first remaining chunk if current position is invalid
+                const positionInValidChunk = this.chunks.some(chunk => 
+                    this.pausedAtTime >= chunk.start && this.pausedAtTime <= chunk.end
+                );
+                
+                if (!positionInValidChunk && this.chunks.length > 0) {
+                    const firstChunk = [...this.chunks].sort((a, b) => a.start - b.start)[0];
+                    this.pausedAtTime = firstChunk.start;
+                    this.seekPosition = firstChunk.start;
+                }
+                
+                // Update visual representation
+                this.updateChunkOverlays();
+                this.updateChunkInfo();
+                this.updateSelectionInfo();
+                this.drawWaveform();
             }
             
             handleMouseDown(event) {
@@ -294,14 +565,51 @@
                 
                 const rect = this.waveform.getBoundingClientRect();
                 const x = event.clientX - rect.left;
-                const percent = x / rect.width;
-                const clickTime = percent * this.audioBuffer.duration;
+                
+                // Calculate click time based on the new chunk layout
+                const clickTime = this.getTimeFromPixelPosition(x);
                 
                 this.selection.start = clickTime;
                 this.selection.end = clickTime;
+                this.seekPosition = clickTime;
+                
+                // Enable split button only if we have a valid seek position in a chunk
+                const seekChunk = this.chunks.find(chunk => 
+                    clickTime >= chunk.start && clickTime <= chunk.end
+                );
+                this.splitBtn.disabled = !seekChunk;
                 
                 // Set initial position for potential drag
                 this.initialClickTime = clickTime;
+            }
+            
+            getTimeFromPixelPosition(pixelX) {
+                const totalChunkDuration = this.chunks.reduce((sum, chunk) => sum + (chunk.end - chunk.start), 0);
+                const gapWidth = 4;
+                const totalGaps = Math.max(0, this.chunks.length - 1) * gapWidth;
+                const rect = this.waveform.getBoundingClientRect();
+                const availableWidth = rect.width - totalGaps;
+                
+                let currentX = 0;
+                
+                // Find which chunk the pixel position is in
+                for (const chunk of this.chunks) {
+                    const chunkDuration = chunk.end - chunk.start;
+                    const chunkWidthRatio = chunkDuration / totalChunkDuration;
+                    const chunkWidth = availableWidth * chunkWidthRatio;
+                    
+                    if (pixelX >= currentX && pixelX <= currentX + chunkWidth) {
+                        // Calculate time within this chunk
+                        const pixelInChunk = pixelX - currentX;
+                        const progressInChunk = pixelInChunk / chunkWidth;
+                        return chunk.start + (progressInChunk * chunkDuration);
+                    }
+                    
+                    currentX += chunkWidth + gapWidth;
+                }
+                
+                // If not in any chunk, return the closest chunk boundary
+                return this.chunks.length > 0 ? this.chunks[0].start : 0;
             }
             
             handleMouseMove(event) {
@@ -309,8 +617,7 @@
                 
                 const rect = this.waveform.getBoundingClientRect();
                 const x = event.clientX - rect.left;
-                const percent = Math.max(0, Math.min(1, x / rect.width));
-                const currentTime = percent * this.audioBuffer.duration;
+                const currentTime = this.getTimeFromPixelPosition(Math.max(0, Math.min(rect.width, x)));
                 
                 // Check if user has moved enough to start dragging (threshold to distinguish click from drag)
                 if (!this.dragStarted && Math.abs(currentTime - this.initialClickTime) > 0.1) {
@@ -321,6 +628,10 @@
                     // This is a drag operation - update selection
                     this.selection.end = currentTime;
                     this.updateSelectionDisplay();
+                } else {
+                    // Update seek position
+                    this.seekPosition = currentTime;
+                    this.drawWaveform();
                 }
             }
             
@@ -330,6 +641,7 @@
                 if (!this.dragStarted) {
                     // This was a click, not a drag - seek to position
                     this.seekToTime(this.initialClickTime);
+                    this.seekPosition = this.initialClickTime;
                     // Clear selection
                     this.selection.start = 0;
                     this.selection.end = 0;
@@ -358,6 +670,7 @@
                 
                 // Update paused time to the clicked position
                 this.pausedAtTime = time;
+                this.seekPosition = time;
                 
                 // Redraw waveform to show new position
                 this.drawWaveform();
@@ -417,8 +730,14 @@
                     
                     // Reset playback state
                     this.pausedAtTime = 0;
+                    this.seekPosition = 0;
                     this.isPlaying = false;
                     this.selection = { start: 0, end: 0 };
+                    
+                    // Initialize chunks
+                    this.chunks = [{ start: 0, end: this.audioBuffer.duration, id: 0 }];
+                    this.selectedChunk = null;
+                    this.nextChunkId = 1;
                     
                     // Show container first, then generate waveform
                     this.waveformContainer.style.display = 'block';
@@ -430,6 +749,7 @@
                         
                         this.updateDuration();
                         this.updateCurrentTime();
+                        this.updateChunkInfo();
                         this.enableControls();
                         
                         setTimeout(() => {
@@ -472,6 +792,7 @@
                 // Use another requestAnimationFrame to ensure canvas is properly sized
                 requestAnimationFrame(() => {
                     this.drawWaveform();
+                    this.updateChunkOverlays();
                 });
             }
             
@@ -512,46 +833,181 @@
                 
                 const width = this.canvas.width;
                 const height = this.canvas.height;
-                const barWidth = width / this.waveformData.length;
                 
                 // Clear canvas
                 this.ctx.clearRect(0, 0, width, height);
                 
-                // Draw waveform
-                this.ctx.fillStyle = '#4CAF50';
+                // Calculate total duration of all chunks for proportional rendering
+                const totalChunkDuration = this.chunks.reduce((sum, chunk) => sum + (chunk.end - chunk.start), 0);
+                const gapWidth = 4; // pixels between chunks
+                const totalGaps = Math.max(0, this.chunks.length - 1) * gapWidth;
+                const availableWidth = width - totalGaps;
                 
-                for (let i = 0; i < this.waveformData.length; i++) {
-                    const barHeight = this.waveformData[i] * height * 0.8;
-                    const x = i * barWidth;
-                    const y = (height - barHeight) / 2;
-                    
-                    // Ensure minimum bar height for visibility
-                    const minHeight = Math.max(2, barHeight);
-                    const actualBarWidth = Math.max(1, barWidth - 0.5);
-                    
-                    this.ctx.fillRect(x, y, actualBarWidth, minHeight);
-                }
+                let currentX = 0;
                 
-                console.log('Waveform drawn successfully');
+                // Draw each chunk separately with gaps
+                this.chunks.forEach((chunk, chunkIndex) => {
+                    const chunkDuration = chunk.end - chunk.start;
+                    const chunkWidthRatio = chunkDuration / totalChunkDuration;
+                    const chunkWidth = availableWidth * chunkWidthRatio;
+                    
+                    // Calculate which part of the original waveform this chunk represents
+                    const chunkStartRatio = chunk.start / this.audioBuffer.duration;
+                    const chunkEndRatio = chunk.end / this.audioBuffer.duration;
+                    const startSample = Math.floor(chunkStartRatio * this.waveformData.length);
+                    const endSample = Math.ceil(chunkEndRatio * this.waveformData.length);
+                    const chunkSamples = endSample - startSample;
+                    
+                    if (chunkSamples > 0) {
+                        const barWidth = chunkWidth / chunkSamples;
+                        
+                        // Draw this chunk's waveform
+                        for (let i = 0; i < chunkSamples; i++) {
+                            const sampleIndex = startSample + i;
+                            if (sampleIndex < this.waveformData.length) {
+                                this.ctx.fillStyle = '#4CAF50';
+                                
+                                const barHeight = this.waveformData[sampleIndex] * height * 0.8;
+                                const x = currentX + (i * barWidth);
+                                const y = (height - barHeight) / 2;
+                                
+                                // Ensure minimum bar height for visibility
+                                const minHeight = Math.max(2, barHeight);
+                                const actualBarWidth = Math.max(1, barWidth - 0.5);
+                                
+                                this.ctx.fillRect(x, y, actualBarWidth, minHeight);
+                            }
+                        }
+                    }
+                    
+                    // Move to next chunk position (add gap)
+                    currentX += chunkWidth + gapWidth;
+                });
                 
                 // Draw playback progress line
                 this.drawProgressLine();
+                
+                // Draw seek position line
+                this.drawSeekLine();
+                
+                console.log('Waveform drawn successfully');
+            }
+            
+            drawChunkBoundaries() {
+                if (!this.audioBuffer) return;
+                
+                this.ctx.strokeStyle = '#FF6B6B';
+                this.ctx.lineWidth = 2;
+                
+                // Draw vertical lines at chunk boundaries
+                this.chunks.forEach(chunk => {
+                    if (chunk.start > 0) {
+                        const x = (chunk.start / this.audioBuffer.duration) * this.canvas.width;
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(x, 0);
+                        this.ctx.lineTo(x, this.canvas.height);
+                        this.ctx.stroke();
+                    }
+                    if (chunk.end < this.audioBuffer.duration) {
+                        const x = (chunk.end / this.audioBuffer.duration) * this.canvas.width;
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(x, 0);
+                        this.ctx.lineTo(x, this.canvas.height);
+                        this.ctx.stroke();
+                    }
+                });
             }
             
             drawProgressLine() {
                 if (!this.audioBuffer) return;
                 
-                // Always draw progress line - position depends on state
                 const currentTime = this.getCurrentPlaybackTime();
-                const progress = Math.min(currentTime / this.audioBuffer.duration, 1);
-                const x = progress * this.canvas.width;
                 
-                this.ctx.strokeStyle = '#FF6B6B';
+                // Find which chunk contains the current time
+                const currentChunk = this.chunks.find(chunk => 
+                    currentTime >= chunk.start && currentTime <= chunk.end
+                );
+                
+                if (!currentChunk) return; // Don't draw if not in any chunk
+                
+                // Calculate position within the chunk layout
+                const totalChunkDuration = this.chunks.reduce((sum, chunk) => sum + (chunk.end - chunk.start), 0);
+                const gapWidth = 4;
+                const totalGaps = Math.max(0, this.chunks.length - 1) * gapWidth;
+                const availableWidth = this.canvas.width - totalGaps;
+                
+                let currentX = 0;
+                let progressX = 0;
+                
+                // Find the position for the current chunk
+                for (const chunk of this.chunks) {
+                    const chunkDuration = chunk.end - chunk.start;
+                    const chunkWidthRatio = chunkDuration / totalChunkDuration;
+                    const chunkWidth = availableWidth * chunkWidthRatio;
+                    
+                    if (chunk.id === currentChunk.id) {
+                        // Calculate position within this chunk
+                        const timeInChunk = currentTime - chunk.start;
+                        const progressInChunk = timeInChunk / chunkDuration;
+                        progressX = currentX + (progressInChunk * chunkWidth);
+                        break;
+                    }
+                    
+                    currentX += chunkWidth + gapWidth;
+                }
+                
+                this.ctx.strokeStyle = '#FFD700';
                 this.ctx.lineWidth = 2;
                 this.ctx.beginPath();
-                this.ctx.moveTo(x, 0);
-                this.ctx.lineTo(x, this.canvas.height);
+                this.ctx.moveTo(progressX, 0);
+                this.ctx.lineTo(progressX, this.canvas.height);
                 this.ctx.stroke();
+            }
+            
+            drawSeekLine() {
+                if (!this.audioBuffer) return;
+                
+                // Find which chunk contains the seek position
+                const seekChunk = this.chunks.find(chunk => 
+                    this.seekPosition >= chunk.start && this.seekPosition <= chunk.end
+                );
+                
+                if (!seekChunk) return; // Don't draw if not in any chunk
+                
+                // Calculate position within the chunk layout
+                const totalChunkDuration = this.chunks.reduce((sum, chunk) => sum + (chunk.end - chunk.start), 0);
+                const gapWidth = 4;
+                const totalGaps = Math.max(0, this.chunks.length - 1) * gapWidth;
+                const availableWidth = this.canvas.width - totalGaps;
+                
+                let currentX = 0;
+                let seekX = 0;
+                
+                // Find the position for the seek chunk
+                for (const chunk of this.chunks) {
+                    const chunkDuration = chunk.end - chunk.start;
+                    const chunkWidthRatio = chunkDuration / totalChunkDuration;
+                    const chunkWidth = availableWidth * chunkWidthRatio;
+                    
+                    if (chunk.id === seekChunk.id) {
+                        // Calculate position within this chunk
+                        const timeInChunk = this.seekPosition - chunk.start;
+                        const progressInChunk = timeInChunk / chunkDuration;
+                        seekX = currentX + (progressInChunk * chunkWidth);
+                        break;
+                    }
+                    
+                    currentX += chunkWidth + gapWidth;
+                }
+                
+                this.ctx.strokeStyle = '#FF6B6B';
+                this.ctx.lineWidth = 1;
+                this.ctx.setLineDash([5, 5]);
+                this.ctx.beginPath();
+                this.ctx.moveTo(seekX, 0);
+                this.ctx.lineTo(seekX, this.canvas.height);
+                this.ctx.stroke();
+                this.ctx.setLineDash([]); // Reset line dash
             }
             
             getCurrentPlaybackTime() {
@@ -559,29 +1015,123 @@
                 return this.pausedAtTime + (this.audioContext.currentTime - this.playStartTime);
             }
             
+            handleMouseUp() {
+                if (!this.isDragging) return;
+                
+                if (!this.dragStarted) {
+                    // This was a click, not a drag - seek to position
+                    this.seekToTime(this.initialClickTime);
+                    this.seekPosition = this.initialClickTime;
+                    // Clear selection
+                    this.selection.start = 0;
+                    this.selection.end = 0;
+                    this.selectionDiv.style.display = 'none';
+                    this.updateSelectionInfo();
+                } else {
+                    // This was a drag - finalize selection
+                    this.endSelection();
+                }
+                
+                this.isDragging = false;
+                this.dragStarted = false;
+            }
+            
             endSelection() {
                 this.isDragging = false;
                 if (this.selection.start > this.selection.end) {
                     [this.selection.start, this.selection.end] = [this.selection.end, this.selection.start];
                 }
+                
+                // Validate that selection is within existing chunks
+                const startInChunk = this.chunks.some(chunk => 
+                    this.selection.start >= chunk.start && this.selection.start <= chunk.end
+                );
+                const endInChunk = this.chunks.some(chunk => 
+                    this.selection.end >= chunk.start && this.selection.end <= chunk.end
+                );
+                
+                if (!startInChunk || !endInChunk) {
+                    // Clear invalid selection
+                    this.selection.start = 0;
+                    this.selection.end = 0;
+                    this.selectionDiv.style.display = 'none';
+                }
+                
                 this.updateSelectionInfo();
-                this.cropBtn.disabled = this.selection.start === this.selection.end;
+                this.updateSelectionDisplay();
             }
             
             updateSelectionDisplay() {
-                const duration = this.audioBuffer.duration;
-                const startPercent = (this.selection.start / duration) * 100;
-                const endPercent = (this.selection.end / duration) * 100;
+                if (!this.audioBuffer || this.chunks.length === 0) return;
                 
-                this.selectionDiv.style.left = Math.min(startPercent, endPercent) + '%';
-                this.selectionDiv.style.width = Math.abs(endPercent - startPercent) + '%';
-                this.selectionDiv.style.display = 'block';
+                // Calculate selection position based on chunk layout
+                const totalChunkDuration = this.chunks.reduce((sum, chunk) => sum + (chunk.end - chunk.start), 0);
+                const gapWidth = 4; // pixels between chunks
+                const totalGaps = Math.max(0, this.chunks.length - 1) * gapWidth;
+                const rect = this.waveform.getBoundingClientRect();
+                const availableWidth = rect.width - totalGaps;
+                
+                let selectionStartX = null;
+                let selectionEndX = null;
+                let currentX = 0;
+                
+                // Find pixel positions for selection start and end
+                for (const chunk of this.chunks) {
+                    const chunkDuration = chunk.end - chunk.start;
+                    const chunkWidthRatio = chunkDuration / totalChunkDuration;
+                    const chunkWidth = availableWidth * chunkWidthRatio;
+                    
+                    // Check if selection start is in this chunk
+                    if (selectionStartX === null && this.selection.start >= chunk.start && this.selection.start <= chunk.end) {
+                        const timeInChunk = this.selection.start - chunk.start;
+                        const progressInChunk = timeInChunk / chunkDuration;
+                        selectionStartX = currentX + (progressInChunk * chunkWidth);
+                    }
+                    
+                    // Check if selection end is in this chunk
+                    if (selectionEndX === null && this.selection.end >= chunk.start && this.selection.end <= chunk.end) {
+                        const timeInChunk = this.selection.end - chunk.start;
+                        const progressInChunk = timeInChunk / chunkDuration;
+                        selectionEndX = currentX + (progressInChunk * chunkWidth);
+                    }
+                    
+                    currentX += chunkWidth + gapWidth;
+                }
+                
+                // Only show selection if both start and end are within valid chunks
+                if (selectionStartX !== null && selectionEndX !== null) {
+                    const leftX = Math.min(selectionStartX, selectionEndX);
+                    const rightX = Math.max(selectionStartX, selectionEndX);
+                    
+                    this.selectionDiv.style.left = (leftX / rect.width * 100) + '%';
+                    this.selectionDiv.style.width = ((rightX - leftX) / rect.width * 100) + '%';
+                    this.selectionDiv.style.display = 'block';
+                } else {
+                    // Hide selection if it spans deleted chunks or is outside valid chunks
+                    this.selectionDiv.style.display = 'none';
+                }
             }
             
             updateSelectionInfo() {
                 if (this.selection.start === this.selection.end) {
                     this.selectionInfo.textContent = 'No selection';
                     this.cropBtn.disabled = true;
+                    this.deleteSelectionBtn.disabled = true;
+                    return;
+                }
+                
+                // Check if selection is valid (both points in existing chunks)
+                const startInChunk = this.chunks.some(chunk => 
+                    this.selection.start >= chunk.start && this.selection.start <= chunk.end
+                );
+                const endInChunk = this.chunks.some(chunk => 
+                    this.selection.end >= chunk.start && this.selection.end <= chunk.end
+                );
+                
+                if (!startInChunk || !endInChunk) {
+                    this.selectionInfo.textContent = 'Selection spans deleted chunks';
+                    this.cropBtn.disabled = true;
+                    this.deleteSelectionBtn.disabled = true;
                     return;
                 }
                 
@@ -590,6 +1140,7 @@
                 const duration = this.formatTime(Math.abs(this.selection.end - this.selection.start));
                 this.selectionInfo.textContent = `${start} - ${end} (${duration})`;
                 this.cropBtn.disabled = false;
+                this.deleteSelectionBtn.disabled = false;
             }
             
             updateDuration() {
@@ -622,19 +1173,92 @@
                     await this.audioContext.resume();
                 }
                 
+                if (this.selectedChunk) {
+                    // Play only the selected chunk
+                    this.playChunk(this.selectedChunk);
+                } else {
+                    // Play all remaining chunks in sequence
+                    this.playAllChunks();
+                }
+            }
+            
+            async playChunk(chunk) {
                 this.source = this.audioContext.createBufferSource();
-                this.source.buffer = this.audioBuffer;
+                const chunkBuffer = this.createChunkBuffer(chunk);
+                this.source.buffer = chunkBuffer;
                 this.source.connect(this.audioContext.destination);
                 
-                // Start from current paused position
-                this.source.start(0, this.pausedAtTime);
+                // Calculate start position within the chunk
+                let startOffset = 0;
+                if (this.pausedAtTime >= chunk.start && this.pausedAtTime <= chunk.end) {
+                    startOffset = this.pausedAtTime - chunk.start;
+                }
+                
+                this.source.start(0, startOffset);
                 this.playStartTime = this.audioContext.currentTime;
+                this.pausedAtTime = chunk.start + startOffset;
                 this.isPlaying = true;
+                this.currentlyPlayingChunk = chunk;
                 
                 this.playBtn.textContent = '⏸️ Playing...';
                 this.pauseBtn.disabled = false;
                 
-                // Start animation loop for progress line
+                // Start animation loop
+                this.animateProgress();
+                
+                // Auto-stop when chunk ends
+                this.source.onended = () => {
+                    if (this.isPlaying) {
+                        this.stop();
+                    }
+                };
+            }
+            
+            async playAllChunks() {
+                if (this.chunks.length === 0) {
+                    this.stop();
+                    return;
+                }
+                
+                // Sort chunks by start time
+                const sortedChunks = [...this.chunks].sort((a, b) => a.start - b.start);
+                
+                // Find which chunk to start from based on pausedAtTime
+                let startChunkIndex = 0;
+                let startOffset = 0;
+                
+                for (let i = 0; i < sortedChunks.length; i++) {
+                    const chunk = sortedChunks[i];
+                    if (this.pausedAtTime >= chunk.start && this.pausedAtTime <= chunk.end) {
+                        startChunkIndex = i;
+                        startOffset = this.pausedAtTime - chunk.start;
+                        break;
+                    } else if (this.pausedAtTime < chunk.start) {
+                        startChunkIndex = i;
+                        startOffset = 0;
+                        this.pausedAtTime = chunk.start;
+                        break;
+                    }
+                }
+                
+                // Create a combined buffer from all remaining chunks
+                const combinedBuffer = this.createCombinedChunksBuffer(sortedChunks, startChunkIndex, startOffset);
+                
+                this.source = this.audioContext.createBufferSource();
+                this.source.buffer = combinedBuffer;
+                this.source.connect(this.audioContext.destination);
+                this.source.start(0);
+                
+                this.playStartTime = this.audioContext.currentTime;
+                this.isPlaying = true;
+                this.currentlyPlayingChunk = null; // Playing multiple chunks
+                this.playingChunks = sortedChunks.slice(startChunkIndex);
+                this.playingStartOffset = startOffset;
+                
+                this.playBtn.textContent = '⏸️ Playing...';
+                this.pauseBtn.disabled = false;
+                
+                // Start animation loop
                 this.animateProgress();
                 
                 // Auto-stop when audio ends
@@ -643,6 +1267,77 @@
                         this.stop();
                     }
                 };
+            }
+            
+            createCombinedChunksBuffer(sortedChunks, startChunkIndex = 0, startOffset = 0) {
+                if (sortedChunks.length === 0) return null;
+                
+                const sampleRate = this.audioBuffer.sampleRate;
+                const channels = this.audioBuffer.numberOfChannels;
+                
+                // Calculate total duration from startChunkIndex onwards
+                let totalDuration = 0;
+                for (let i = startChunkIndex; i < sortedChunks.length; i++) {
+                    const chunk = sortedChunks[i];
+                    const chunkDuration = chunk.end - chunk.start;
+                    if (i === startChunkIndex) {
+                        totalDuration += chunkDuration - startOffset;
+                    } else {
+                        totalDuration += chunkDuration;
+                    }
+                }
+                
+                const totalFrames = Math.floor(totalDuration * sampleRate);
+                const combinedBuffer = this.audioContext.createBuffer(channels, totalFrames, sampleRate);
+                
+                let currentFrame = 0;
+                
+                // Copy audio data from chunks
+                for (let i = startChunkIndex; i < sortedChunks.length; i++) {
+                    const chunk = sortedChunks[i];
+                    const chunkStartTime = i === startChunkIndex ? chunk.start + startOffset : chunk.start;
+                    const chunkEndTime = chunk.end;
+                    
+                    const startFrame = Math.floor(chunkStartTime * sampleRate);
+                    const endFrame = Math.floor(chunkEndTime * sampleRate);
+                    const chunkFrames = endFrame - startFrame;
+                    
+                    for (let channel = 0; channel < channels; channel++) {
+                        const oldData = this.audioBuffer.getChannelData(channel);
+                        const newData = combinedBuffer.getChannelData(channel);
+                        
+                        for (let j = 0; j < chunkFrames; j++) {
+                            if (currentFrame + j < totalFrames) {
+                                newData[currentFrame + j] = oldData[startFrame + j] || 0;
+                            }
+                        }
+                    }
+                    currentFrame += chunkFrames;
+                }
+                
+                return combinedBuffer;
+            }
+            
+            createChunkBuffer(chunk) {
+                const sampleRate = this.audioBuffer.sampleRate;
+                const channels = this.audioBuffer.numberOfChannels;
+                const startFrame = Math.floor(chunk.start * sampleRate);
+                const endFrame = Math.floor(chunk.end * sampleRate);
+                const frameCount = endFrame - startFrame;
+                
+                const chunkBuffer = this.audioContext.createBuffer(channels, frameCount, sampleRate);
+                
+                // Copy audio data for the chunk
+                for (let channel = 0; channel < channels; channel++) {
+                    const oldData = this.audioBuffer.getChannelData(channel);
+                    const newData = chunkBuffer.getChannelData(channel);
+                    
+                    for (let i = 0; i < frameCount; i++) {
+                        newData[i] = oldData[startFrame + i] || 0;
+                    }
+                }
+                
+                return chunkBuffer;
             }
             
             animateProgress() {
@@ -657,8 +1352,13 @@
                 if (!this.isPlaying) return;
                 
                 this.source.stop();
+                
+                // Update paused time based on current playback position
                 this.pausedAtTime = this.getCurrentPlaybackTime();
+                
                 this.isPlaying = false;
+                this.currentlyPlayingChunk = null;
+                this.playingChunks = null;
                 this.playBtn.textContent = '▶️ Play';
                 this.pauseBtn.disabled = true;
                 
@@ -672,11 +1372,23 @@
                     this.source.stop();
                 }
                 this.isPlaying = false;
-                this.pausedAtTime = 0; // Reset to beginning
+                this.currentlyPlayingChunk = null;
+                this.playingChunks = null;
+                
+                // Reset to beginning of first chunk or selected chunk
+                if (this.selectedChunk) {
+                    this.pausedAtTime = this.selectedChunk.start;
+                } else if (this.chunks.length > 0) {
+                    const firstChunk = [...this.chunks].sort((a, b) => a.start - b.start)[0];
+                    this.pausedAtTime = firstChunk.start;
+                } else {
+                    this.pausedAtTime = 0;
+                }
+                
                 this.playBtn.textContent = '▶️ Play';
                 this.pauseBtn.disabled = true;
                 
-                // Redraw waveform with progress line at leftmost position
+                // Redraw waveform with progress line at stop position
                 this.drawWaveform();
                 this.updateCurrentTime();
             }
@@ -730,7 +1442,7 @@
                     // Cleanup
                     setTimeout(() => URL.revokeObjectURL(url), 100);
                     
-                    this.cropBtn.textContent = '✂️ Crop Selection';
+                    this.cropBtn.textContent = '📏 Crop Selection';
                     this.cropBtn.disabled = false;
                     
                     console.log(`Cropped audio: ${start.toFixed(2)}s to ${end.toFixed(2)}s`);
@@ -738,8 +1450,65 @@
                 } catch (error) {
                     console.error('Error cropping audio:', error);
                     alert('Error cropping audio. Please try again.');
-                    this.cropBtn.textContent = '✂️ Crop Selection';
+                    this.cropBtn.textContent = '📏 Crop Selection';
                     this.cropBtn.disabled = false;
+                }
+            }
+            
+            async exportRemainingChunks() {
+                if (this.chunks.length === 0) {
+                    alert('No chunks to export');
+                    return;
+                }
+                
+                try {
+                    // Calculate total duration of remaining chunks
+                    let totalDuration = 0;
+                    this.chunks.forEach(chunk => {
+                        totalDuration += (chunk.end - chunk.start);
+                    });
+                    
+                    const sampleRate = this.audioBuffer.sampleRate;
+                    const channels = this.audioBuffer.numberOfChannels;
+                    const totalFrames = Math.floor(totalDuration * sampleRate);
+                    
+                    const newBuffer = this.audioContext.createBuffer(channels, totalFrames, sampleRate);
+                    
+                    // Copy audio data from all chunks
+                    let currentFrame = 0;
+                    for (const chunk of this.chunks) {
+                        const startFrame = Math.floor(chunk.start * sampleRate);
+                        const endFrame = Math.floor(chunk.end * sampleRate);
+                        const chunkFrames = endFrame - startFrame;
+                        
+                        for (let channel = 0; channel < channels; channel++) {
+                            const oldData = this.audioBuffer.getChannelData(channel);
+                            const newData = newBuffer.getChannelData(channel);
+                            
+                            for (let i = 0; i < chunkFrames; i++) {
+                                newData[currentFrame + i] = oldData[startFrame + i] || 0;
+                            }
+                        }
+                        currentFrame += chunkFrames;
+                    }
+                    
+                    // Convert to WAV and download
+                    const wavArrayBuffer = this.audioBufferToWav(newBuffer);
+                    const blob = new Blob([wavArrayBuffer], { type: 'audio/wav' });
+                    
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `edited_audio_${this.chunks.length}_chunks.wav`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    
+                    setTimeout(() => URL.revokeObjectURL(url), 100);
+                    
+                } catch (error) {
+                    console.error('Error exporting chunks:', error);
+                    alert('Error exporting audio. Please try again.');
                 }
             }
             
@@ -795,9 +1564,9 @@
             }
         }
         
-        // Initialize the audio cropper when the page loads
+        // Initialize the audio chunking editor when the page loads
         document.addEventListener('DOMContentLoaded', () => {
-            new AudioCropper();
+            new AudioChunkingEditor();
         });
     </script>
 </body>
