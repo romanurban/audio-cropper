@@ -158,6 +158,15 @@
             width: 0%;
             transition: width 0.3s ease;
         }
+        
+        .instructions {
+            margin-top: 10px;
+            padding: 8px;
+            background: #2a2a2a;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #ccc;
+        }
     </style>
 </head>
 <body>
@@ -178,6 +187,10 @@
                 <div class="selection" id="selection" style="display: none;"></div>
             </div>
             
+            <div class="instructions">
+                🎯 <strong>Click</strong> on waveform to seek to position | 🎨 <strong>Drag</strong> to select region for cropping
+            </div>
+            
             <div class="controls">
                 <button class="btn btn-primary" id="playBtn" disabled>▶️ Play</button>
                 <button class="btn btn-secondary" id="pauseBtn" disabled>⏸️ Pause</button>
@@ -187,6 +200,7 @@
             
             <div class="info" id="info">
                 <div>Duration: <span id="duration">--:--</span></div>
+                <div>Current Time: <span id="currentTime">--:--</span></div>
                 <div>Selection: <span id="selectionInfo">No selection</span></div>
             </div>
             
@@ -208,6 +222,7 @@
                 this.selection = { start: 0, end: 0 };
                 this.waveformData = null;
                 this.isDragging = false;
+                this.dragStarted = false;
                 this.originalFile = null;
                 this.isInitialized = false;
                 
@@ -228,6 +243,7 @@
                 this.stopBtn = document.getElementById('stopBtn');
                 this.cropBtn = document.getElementById('cropBtn');
                 this.durationSpan = document.getElementById('duration');
+                this.currentTimeSpan = document.getElementById('currentTime');
                 this.selectionInfo = document.getElementById('selectionInfo');
                 this.progress = document.getElementById('progress');
                 this.progressBar = document.getElementById('progressBar');
@@ -257,10 +273,10 @@
                 });
                 
                 // Waveform interaction
-                this.waveform.addEventListener('mousedown', (e) => this.startSelection(e));
-                this.waveform.addEventListener('mousemove', (e) => this.updateSelection(e));
-                this.waveform.addEventListener('mouseup', () => this.endSelection());
-                this.waveform.addEventListener('mouseleave', () => this.endSelection());
+                this.waveform.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+                this.waveform.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+                this.waveform.addEventListener('mouseup', () => this.handleMouseUp());
+                this.waveform.addEventListener('mouseleave', () => this.handleMouseUp());
                 
                 // Controls
                 this.playBtn.addEventListener('click', () => this.play());
@@ -270,6 +286,86 @@
                 
                 // Resize
                 window.addEventListener('resize', () => this.resizeCanvas());
+            }
+            
+            handleMouseDown(event) {
+                this.isDragging = true;
+                this.dragStarted = false;
+                
+                const rect = this.waveform.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const percent = x / rect.width;
+                const clickTime = percent * this.audioBuffer.duration;
+                
+                this.selection.start = clickTime;
+                this.selection.end = clickTime;
+                
+                // Set initial position for potential drag
+                this.initialClickTime = clickTime;
+            }
+            
+            handleMouseMove(event) {
+                if (!this.isDragging) return;
+                
+                const rect = this.waveform.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const percent = Math.max(0, Math.min(1, x / rect.width));
+                const currentTime = percent * this.audioBuffer.duration;
+                
+                // Check if user has moved enough to start dragging (threshold to distinguish click from drag)
+                if (!this.dragStarted && Math.abs(currentTime - this.initialClickTime) > 0.1) {
+                    this.dragStarted = true;
+                }
+                
+                if (this.dragStarted) {
+                    // This is a drag operation - update selection
+                    this.selection.end = currentTime;
+                    this.updateSelectionDisplay();
+                }
+            }
+            
+            handleMouseUp() {
+                if (!this.isDragging) return;
+                
+                if (!this.dragStarted) {
+                    // This was a click, not a drag - seek to position
+                    this.seekToTime(this.initialClickTime);
+                    // Clear selection
+                    this.selection.start = 0;
+                    this.selection.end = 0;
+                    this.selectionDiv.style.display = 'none';
+                    this.updateSelectionInfo();
+                } else {
+                    // This was a drag - finalize selection
+                    this.endSelection();
+                }
+                
+                this.isDragging = false;
+                this.dragStarted = false;
+            }
+            
+            async seekToTime(time) {
+                // Clamp time to valid range
+                time = Math.max(0, Math.min(time, this.audioBuffer.duration));
+                
+                const wasPlaying = this.isPlaying;
+                
+                // Stop current playback
+                if (this.isPlaying) {
+                    this.source.stop();
+                    this.isPlaying = false;
+                }
+                
+                // Update paused time to the clicked position
+                this.pausedAtTime = time;
+                
+                // Redraw waveform to show new position
+                this.drawWaveform();
+                
+                // If audio was playing, resume from new position
+                if (wasPlaying) {
+                    await this.play();
+                }
             }
             
             async initializeAudioContext() {
@@ -319,6 +415,11 @@
                     this.audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
                     this.updateProgress(75);
                     
+                    // Reset playback state
+                    this.pausedAtTime = 0;
+                    this.isPlaying = false;
+                    this.selection = { start: 0, end: 0 };
+                    
                     // Show container first, then generate waveform
                     this.waveformContainer.style.display = 'block';
                     
@@ -328,6 +429,7 @@
                         this.updateProgress(100);
                         
                         this.updateDuration();
+                        this.updateCurrentTime();
                         this.enableControls();
                         
                         setTimeout(() => {
@@ -457,26 +559,6 @@
                 return this.pausedAtTime + (this.audioContext.currentTime - this.playStartTime);
             }
             
-            startSelection(event) {
-                this.isDragging = true;
-                const rect = this.waveform.getBoundingClientRect();
-                const x = event.clientX - rect.left;
-                const percent = x / rect.width;
-                this.selection.start = percent * this.audioBuffer.duration;
-                this.selection.end = this.selection.start;
-                this.updateSelectionDisplay();
-            }
-            
-            updateSelection(event) {
-                if (!this.isDragging) return;
-                
-                const rect = this.waveform.getBoundingClientRect();
-                const x = event.clientX - rect.left;
-                const percent = Math.max(0, Math.min(1, x / rect.width));
-                this.selection.end = percent * this.audioBuffer.duration;
-                this.updateSelectionDisplay();
-            }
-            
             endSelection() {
                 this.isDragging = false;
                 if (this.selection.start > this.selection.end) {
@@ -499,6 +581,7 @@
             updateSelectionInfo() {
                 if (this.selection.start === this.selection.end) {
                     this.selectionInfo.textContent = 'No selection';
+                    this.cropBtn.disabled = true;
                     return;
                 }
                 
@@ -506,10 +589,17 @@
                 const end = this.formatTime(this.selection.end);
                 const duration = this.formatTime(Math.abs(this.selection.end - this.selection.start));
                 this.selectionInfo.textContent = `${start} - ${end} (${duration})`;
+                this.cropBtn.disabled = false;
             }
             
             updateDuration() {
                 this.durationSpan.textContent = this.formatTime(this.audioBuffer.duration);
+            }
+            
+            updateCurrentTime() {
+                if (!this.audioBuffer) return;
+                const currentTime = this.getCurrentPlaybackTime();
+                this.currentTimeSpan.textContent = this.formatTime(currentTime);
             }
             
             formatTime(seconds) {
@@ -559,6 +649,7 @@
                 if (!this.isPlaying) return;
                 
                 this.drawWaveform();
+                this.updateCurrentTime();
                 requestAnimationFrame(() => this.animateProgress());
             }
             
@@ -573,6 +664,7 @@
                 
                 // Redraw waveform with progress line at paused position
                 this.drawWaveform();
+                this.updateCurrentTime();
             }
             
             stop() {
@@ -586,6 +678,7 @@
                 
                 // Redraw waveform with progress line at leftmost position
                 this.drawWaveform();
+                this.updateCurrentTime();
             }
             
             async cropAudio() {
