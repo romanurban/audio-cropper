@@ -244,8 +244,7 @@
                 <button class="btn btn-secondary" id="stopBtn" disabled>⏹️ Stop</button>
                 <button class="btn btn-warning" id="splitBtn" disabled>✂️ Split at Position</button>
                 <button class="btn btn-primary" id="cropBtn" disabled>📏 Crop Selection</button>
-                <button class="btn btn-danger" id="deleteSelectionBtn" disabled>✂️ Delete Selection</button>
-                <button class="btn btn-danger" id="deleteChunkBtn" disabled>🗑️ Delete Selected Chunk</button>
+                <button class="btn btn-danger" id="deleteBtn" disabled>🗑️ Delete</button>
             </div>
             
             <div class="info" id="info">
@@ -309,8 +308,7 @@
                 this.stopBtn = document.getElementById('stopBtn');
                 this.splitBtn = document.getElementById('splitBtn');
                 this.cropBtn = document.getElementById('cropBtn');
-                this.deleteSelectionBtn = document.getElementById('deleteSelectionBtn');
-                this.deleteChunkBtn = document.getElementById('deleteChunkBtn');
+                this.deleteBtn = document.getElementById('deleteBtn');
                 this.durationSpan = document.getElementById('duration');
                 this.currentTimeSpan = document.getElementById('currentTime');
                 this.selectionInfo = document.getElementById('selectionInfo');
@@ -357,8 +355,7 @@
                 this.stopBtn.addEventListener('click', () => this.stop());
                 this.splitBtn.addEventListener('click', () => this.splitAtPosition());
                 this.cropBtn.addEventListener('click', () => this.cropAudio());
-                this.deleteSelectionBtn.addEventListener('click', () => this.deleteSelection());
-                this.deleteChunkBtn.addEventListener('click', () => this.deleteSelectedChunk());
+                this.deleteBtn.addEventListener('click', () => this.delete());
                 
                 // Resize
                 window.addEventListener('resize', () => this.resizeCanvas());
@@ -407,7 +404,14 @@
                 this.selectedChunk = chunk;
                 this.updateChunkOverlays();
                 this.updateChunkInfo();
-                this.deleteChunkBtn.disabled = false;
+                this.updateDeleteButton();
+            }
+            
+            updateDeleteButton() {
+                // Enable delete button if we have either a chunk selected or a valid selection
+                const hasSelection = this.selection.start !== this.selection.end;
+                const hasChunkSelected = this.selectedChunk !== null;
+                this.deleteBtn.disabled = !(hasSelection || hasChunkSelected);
             }
             
             updateChunkOverlays() {
@@ -512,7 +516,7 @@
                 
                 // Deselect any selected chunk
                 this.selectedChunk = null;
-                this.deleteChunkBtn.disabled = true;
+                this.updateDeleteButton();
                 
                 // Update visual representation
                 this.updateChunkOverlays();
@@ -610,40 +614,35 @@
                 this.seekPosition = this.pausedAtTime;
             }
             
-            deleteSelectedChunk() {
-                if (!this.selectedChunk || this.chunks.length <= 1) {
-                    alert('Cannot delete chunk - at least one chunk must remain');
-                    return;
+            // Unified delete function
+            delete() {
+                // Determine what to delete - prioritize selection over chunk
+                if (this.selection.start !== this.selection.end) {
+                    // Delete selection
+                    const startTime = Math.min(this.selection.start, this.selection.end);
+                    const endTime = Math.max(this.selection.start, this.selection.end);
+                    
+                    this.deleteAudioRange(startTime, endTime);
+                    
+                    // Clear selection
+                    this.selection.start = 0;
+                    this.selection.end = 0;
+                    this.selectionDiv.style.display = 'none';
+                    
+                } else if (this.selectedChunk) {
+                    // Delete selected chunk
+                    if (this.chunks.length <= 1) {
+                        alert('Cannot delete chunk - at least one chunk must remain');
+                        return;
+                    }
+                    
+                    this.deleteAudioRange(this.selectedChunk.start, this.selectedChunk.end);
+                    
+                    // Clear chunk selection
+                    this.selectedChunk = null;
                 }
                 
-                // Use common deletion function
-                this.deleteAudioRange(this.selectedChunk.start, this.selectedChunk.end);
-                
-                // Clear selection
-                this.selectedChunk = null;
-                this.deleteChunkBtn.disabled = true;
-                this.selection.start = 0;
-                this.selection.end = 0;
-                this.selectionDiv.style.display = 'none';
-                
-                this.updateSelectionInfo();
-            }
-            
-            deleteSelection() {
-                if (!this.selection || this.selection.start === this.selection.end) return;
-                
-                const startTime = Math.min(this.selection.start, this.selection.end);
-                const endTime = Math.max(this.selection.start, this.selection.end);
-                
-                // Use common deletion function
-                this.deleteAudioRange(startTime, endTime);
-                
-                // Clear selection
-                this.selection.start = 0;
-                this.selection.end = 0;
-                this.selectionDiv.style.display = 'none';
-                this.deleteSelectionBtn.disabled = true;
-                
+                this.updateDeleteButton();
                 this.updateSelectionInfo();
             }
             
@@ -735,6 +734,7 @@
                     this.selection.end = 0;
                     this.selectionDiv.style.display = 'none';
                     this.updateSelectionInfo();
+                    this.updateDeleteButton();
                 } else {
                     // This was a drag - finalize selection
                     this.endSelection();
@@ -838,6 +838,7 @@
                         this.updateDuration();
                         this.updateCurrentTime();
                         this.updateChunkInfo();
+                        this.updateDeleteButton();
                         this.enableControls();
                         
                         setTimeout(() => {
@@ -1126,6 +1127,7 @@
                 
                 this.updateSelectionInfo();
                 this.updateSelectionDisplay();
+                this.updateDeleteButton();
             }
             
             updateSelectionDisplay() {
@@ -1183,7 +1185,6 @@
                 if (this.selection.start === this.selection.end) {
                     this.selectionInfo.textContent = 'No selection';
                     this.cropBtn.disabled = true;
-                    this.deleteSelectionBtn.disabled = true;
                     return;
                 }
                 
@@ -1198,7 +1199,6 @@
                 if (!startInChunk || !endInChunk) {
                     this.selectionInfo.textContent = 'Selection spans deleted chunks';
                     this.cropBtn.disabled = true;
-                    this.deleteSelectionBtn.disabled = true;
                     return;
                 }
                 
@@ -1207,7 +1207,6 @@
                 const duration = this.formatTime(Math.abs(this.selection.end - this.selection.start));
                 this.selectionInfo.textContent = `${start} - ${end} (${duration})`;
                 this.cropBtn.disabled = false;
-                this.deleteSelectionBtn.disabled = false;
             }
             
             updateDuration() {
