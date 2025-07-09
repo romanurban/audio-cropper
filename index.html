@@ -1239,13 +1239,76 @@
                     await this.audioContext.resume();
                 }
                 
-                if (this.selectedChunk) {
+                // Check if we have a selection (drag selection)
+                if (this.selection.start !== this.selection.end) {
+                    // Play only the selected region
+                    this.playSelection();
+                } else if (this.selectedChunk) {
                     // Play only the selected chunk
                     this.playChunk(this.selectedChunk);
                 } else {
                     // Play all remaining chunks in sequence
                     this.playAllChunks();
                 }
+            }
+            
+            async playSelection() {
+                const startTime = Math.min(this.selection.start, this.selection.end);
+                const endTime = Math.max(this.selection.start, this.selection.end);
+                
+                this.source = this.audioContext.createBufferSource();
+                
+                // Create a buffer for just the selection
+                const duration = endTime - startTime;
+                const sampleRate = this.audioBuffer.sampleRate;
+                const channels = this.audioBuffer.numberOfChannels;
+                const startFrame = Math.floor(startTime * sampleRate);
+                const endFrame = Math.floor(endTime * sampleRate);
+                const frameCount = endFrame - startFrame;
+                
+                const selectionBuffer = this.audioContext.createBuffer(channels, frameCount, sampleRate);
+                
+                // Copy audio data for the selection
+                for (let channel = 0; channel < channels; channel++) {
+                    const oldData = this.audioBuffer.getChannelData(channel);
+                    const newData = selectionBuffer.getChannelData(channel);
+                    
+                    for (let i = 0; i < frameCount; i++) {
+                        newData[i] = oldData[startFrame + i] || 0;
+                    }
+                }
+                
+                this.source.buffer = selectionBuffer;
+                this.source.connect(this.audioContext.destination);
+                
+                // Calculate start offset if we're resuming within the selection
+                let startOffset = 0;
+                if (this.pausedAtTime >= startTime && this.pausedAtTime <= endTime) {
+                    startOffset = this.pausedAtTime - startTime;
+                } else {
+                    // Start from beginning of selection
+                    this.pausedAtTime = startTime;
+                }
+                
+                this.source.start(0, startOffset);
+                this.playStartTime = this.audioContext.currentTime - startOffset;
+                this.isPlaying = true;
+                this.isPlayingSelection = true;
+                this.selectionStartTime = startTime;
+                this.selectionEndTime = endTime;
+                
+                this.playBtn.textContent = '⏸️ Playing...';
+                this.pauseBtn.disabled = false;
+                
+                // Start animation loop
+                this.animateProgress();
+                
+                // Auto-stop when selection ends
+                this.source.onended = () => {
+                    if (this.isPlaying) {
+                        this.stop();
+                    }
+                };
             }
             
             async playChunk(chunk) {
