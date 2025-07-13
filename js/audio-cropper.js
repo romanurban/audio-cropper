@@ -157,6 +157,9 @@ export class AudioChunkingEditor {
             this.chunkManager.initializeChunks(this.audioBuffer);
             this.waveformRenderer.chunks = this.chunkManager.chunks;
             
+            // Update mouse event listeners to use scroll container after it's created
+            this.updateMouseEventListeners();
+            
             this.waveformContainer.style.display = 'block';
             
             requestAnimationFrame(() => {
@@ -185,14 +188,45 @@ export class AudioChunkingEditor {
         this.progressBar.style.width = percent + '%';
     }
 
+    updateMouseEventListeners() {
+        // Remove old listeners from waveform
+        this.waveform.removeEventListener('mousedown', this.boundMouseDown);
+        this.waveform.removeEventListener('mousemove', this.boundMouseMove);
+        this.waveform.removeEventListener('mouseup', this.boundMouseUp);
+        this.waveform.removeEventListener('mouseleave', this.boundMouseUp);
+        this.waveform.removeEventListener('click', this.boundWaveformClick);
+        
+        // Remove old listeners from canvas
+        this.canvas.removeEventListener('mousedown', this.boundMouseDown);
+        this.canvas.removeEventListener('mousemove', this.boundMouseMove);
+        this.canvas.removeEventListener('mouseup', this.boundMouseUp);
+        this.canvas.removeEventListener('mouseleave', this.boundMouseUp);
+        this.canvas.removeEventListener('click', this.boundWaveformClick);
+        
+        // Create bound handlers if they don't exist
+        if (!this.boundMouseDown) {
+            this.boundMouseDown = (e) => this.handleMouseDown(e);
+            this.boundMouseMove = (e) => this.handleMouseMove(e);
+            this.boundMouseUp = () => this.handleMouseUp();
+            this.boundWaveformClick = (e) => this.handleWaveformClick(e);
+        }
+        
+        // Always add listeners to the canvas directly for better coordinate handling
+        this.canvas.addEventListener('mousedown', this.boundMouseDown);
+        this.canvas.addEventListener('mousemove', this.boundMouseMove);
+        this.canvas.addEventListener('mouseup', this.boundMouseUp);
+        this.canvas.addEventListener('mouseleave', this.boundMouseUp);
+        this.canvas.addEventListener('click', this.boundWaveformClick);
+    }
+
     handleWaveformClick(event) {
         if (this.chunkManager.chunks.length <= 1) {
             return;
         }
         
-        // Get coordinates relative to the scroll container (visible area)
-        const scrollRect = this.waveformRenderer.scrollContainer.getBoundingClientRect();
-        const x = event.clientX - scrollRect.left;
+        // Get coordinates relative to the canvas
+        const canvasRect = this.canvas.getBoundingClientRect();
+        const x = event.clientX - canvasRect.left;
         const clickTime = this.waveformRenderer.getTimeFromMousePosition(x);
         
         // Find which chunk was clicked based on time
@@ -212,9 +246,9 @@ export class AudioChunkingEditor {
         this.isDragging = true;
         this.dragStarted = false;
         
-        // Get coordinates relative to the scroll container (visible area)
-        const scrollRect = this.waveformRenderer.scrollContainer.getBoundingClientRect();
-        const x = event.clientX - scrollRect.left;
+        // Get coordinates relative to the canvas
+        const canvasRect = this.canvas.getBoundingClientRect();
+        const x = event.clientX - canvasRect.left;
         
         const clickTime = this.waveformRenderer.getTimeFromMousePosition(x);
         
@@ -234,10 +268,10 @@ export class AudioChunkingEditor {
     handleMouseMove(event) {
         if (!this.isDragging) return;
         
-        // Get coordinates relative to the scroll container (visible area)
-        const scrollRect = this.waveformRenderer.scrollContainer.getBoundingClientRect();
-        const x = event.clientX - scrollRect.left;
-        const currentTime = this.waveformRenderer.getTimeFromMousePosition(Math.max(0, Math.min(scrollRect.width, x)));
+        // Get coordinates relative to the canvas
+        const canvasRect = this.canvas.getBoundingClientRect();
+        const x = event.clientX - canvasRect.left;
+        const currentTime = this.waveformRenderer.getTimeFromMousePosition(x);
         
         if (!this.dragStarted && Math.abs(currentTime - this.initialClickTime) > 0.1) {
             this.dragStarted = true;

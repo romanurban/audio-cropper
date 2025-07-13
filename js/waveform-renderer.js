@@ -653,11 +653,13 @@ export class WaveformRenderer {
             
             // Set canvas size to zoomed width
             this.canvas.style.width = canvasWidth + 'px';
+            this.canvas.style.minWidth = canvasWidth + 'px';
             this.canvas.width = canvasWidth;
             
-            // Remove virtual canvas as we don't need it
+            // Ensure the virtual canvas creates the scroll area
             if (this.virtualCanvas) {
-                this.virtualCanvas.style.width = '1px';
+                this.virtualCanvas.style.width = canvasWidth + 'px';
+                this.virtualCanvas.style.minWidth = canvasWidth + 'px';
             }
             
             // Show scrollbar
@@ -666,10 +668,12 @@ export class WaveformRenderer {
             // Reset to normal size when not zoomed
             const containerWidth = this.scrollContainer.clientWidth;
             this.canvas.style.width = '100%';
+            this.canvas.style.minWidth = 'auto';
             this.canvas.width = containerWidth;
             
             if (this.virtualCanvas) {
                 this.virtualCanvas.style.width = '100%';
+                this.virtualCanvas.style.minWidth = 'auto';
             }
             
             this.scrollContainer.style.overflowX = 'hidden';
@@ -704,7 +708,7 @@ export class WaveformRenderer {
 
     /**
      * Converts mouse pixel position to time, accounting for zoom and scroll
-     * @param {number} mouseX - Mouse X coordinate relative to visible canvas area
+     * @param {number} mouseX - Mouse X coordinate relative to canvas element
      * @returns {number} Time in seconds
      */
     getTimeFromMousePosition(mouseX) {
@@ -715,16 +719,18 @@ export class WaveformRenderer {
             return this.getTimeFromPixelPosition(mouseX);
         }
         
-        // When zoomed, we need to account for the scroll position
-        // mouseX is relative to the visible area, but we need position on the full canvas
-        const scrollLeft = this.scrollContainer ? this.scrollContainer.scrollLeft : 0;
-        const absoluteMouseX = mouseX + scrollLeft;
+        // When zoomed, mouseX is relative to the actual canvas element
+        // which spans the full width of the zoomed audio
         const canvasWidth = this.canvas.width;
         
-        // Convert absolute position to time across the entire audio
-        const timeRatio = Math.max(0, Math.min(1, absoluteMouseX / canvasWidth));
+        // Clamp the position to valid canvas bounds
+        const clampedX = Math.max(0, Math.min(canvasWidth, mouseX));
+        
+        // Convert position to time across the entire audio
+        const timeRatio = clampedX / canvasWidth;
         return timeRatio * this.audioBuffer.duration;
     }
+
 
     /**
      * Converts time to pixel position, accounting for zoom and scroll
