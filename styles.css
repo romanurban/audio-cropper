@@ -207,3 +207,91 @@ input[type="file"] {
     font-size: 12px;
     color: #ccc;
 }
+
+.zoom-controls {
+    position: absolute !important;
+    top: 10px !important;
+    right: 10px !important;
+    display: flex;
+    gap: 4px;
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 8px;
+    padding: 6px;
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    opacity: 0.7;
+    transition: opacity 0.3s ease;
+    pointer-events: auto;
+}
+
+.zoom-controls:hover {
+    opacity: 1;
+}
+
+.zoom-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(76, 175, 80, 0.8);
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.zoom-btn:hover {
+    background: rgba(76, 175, 80, 1);
+    transform: scale(1.1);
+}
+
+.zoom-btn:active {
+    transform: scale(0.95);
+}
+
+.zoom-btn.zoom-reset {
+    background: rgba(255, 152, 0, 0.8);
+    font-size: 14px;
+}
+
+.zoom-btn.zoom-reset:hover {
+    background: rgba(255, 152, 0, 1);
+}
+
+.waveform-scroll-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow-x: hidden;
+    overflow-y: hidden;
+}
+
+.waveform-scroll-container::-webkit-scrollbar {
+    height: 12px;
+}
+
+.waveform-scroll-container::-webkit-scrollbar-track {
+    background: #555;
+    border-radius: 6px;
+}
+
+.waveform-scroll-container::-webkit-scrollbar-thumb {
+    background: #4CAF50;
+    border-radius: 6px;
+}
+
+.waveform-scroll-container::-webkit-scrollbar-thumb:hover {
+    background: #45a049;
+}
+
+.virtual-canvas {
+    pointer-events: none;
+    position: absolute;
+    top: 0;
+    height: 1px;
+}

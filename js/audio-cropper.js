@@ -192,9 +192,16 @@ export class AudioChunkingEditor {
         
         const rect = this.waveform.getBoundingClientRect();
         const x = event.clientX - rect.left;
+        const clickTime = this.waveformRenderer.getTimeFromMousePosition(x);
         
-        const selectedChunk = this.chunkManager.selectChunkAtPosition(x, rect.width);
+        // Find which chunk was clicked based on time
+        const selectedChunk = this.chunkManager.chunks.find(chunk => 
+            clickTime >= chunk.start && clickTime <= chunk.end
+        );
+        
         if (selectedChunk) {
+            this.chunkManager.selectedChunk = selectedChunk;
+            this.chunkManager.updateChunkOverlays();
             this.updateChunkInfo();
             this.updateDeleteButton();
         }
@@ -207,7 +214,7 @@ export class AudioChunkingEditor {
         const rect = this.waveform.getBoundingClientRect();
         const x = event.clientX - rect.left;
         
-        const clickTime = this.waveformRenderer.getTimeFromPixelPosition(x);
+        const clickTime = this.waveformRenderer.getTimeFromMousePosition(x);
         
         this.selection.start = clickTime;
         this.selection.end = clickTime;
@@ -227,7 +234,7 @@ export class AudioChunkingEditor {
         
         const rect = this.waveform.getBoundingClientRect();
         const x = event.clientX - rect.left;
-        const currentTime = this.waveformRenderer.getTimeFromPixelPosition(Math.max(0, Math.min(rect.width, x)));
+        const currentTime = this.waveformRenderer.getTimeFromMousePosition(Math.max(0, Math.min(rect.width, x)));
         
         if (!this.dragStarted && Math.abs(currentTime - this.initialClickTime) > 0.1) {
             this.dragStarted = true;
