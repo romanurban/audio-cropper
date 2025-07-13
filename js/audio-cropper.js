@@ -190,8 +190,9 @@ export class AudioChunkingEditor {
             return;
         }
         
-        const rect = this.waveform.getBoundingClientRect();
-        const x = event.clientX - rect.left;
+        // Get coordinates relative to the scroll container (visible area)
+        const scrollRect = this.waveformRenderer.scrollContainer.getBoundingClientRect();
+        const x = event.clientX - scrollRect.left;
         const clickTime = this.waveformRenderer.getTimeFromMousePosition(x);
         
         // Find which chunk was clicked based on time
@@ -211,8 +212,9 @@ export class AudioChunkingEditor {
         this.isDragging = true;
         this.dragStarted = false;
         
-        const rect = this.waveform.getBoundingClientRect();
-        const x = event.clientX - rect.left;
+        // Get coordinates relative to the scroll container (visible area)
+        const scrollRect = this.waveformRenderer.scrollContainer.getBoundingClientRect();
+        const x = event.clientX - scrollRect.left;
         
         const clickTime = this.waveformRenderer.getTimeFromMousePosition(x);
         
@@ -232,9 +234,10 @@ export class AudioChunkingEditor {
     handleMouseMove(event) {
         if (!this.isDragging) return;
         
-        const rect = this.waveform.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const currentTime = this.waveformRenderer.getTimeFromMousePosition(Math.max(0, Math.min(rect.width, x)));
+        // Get coordinates relative to the scroll container (visible area)
+        const scrollRect = this.waveformRenderer.scrollContainer.getBoundingClientRect();
+        const x = event.clientX - scrollRect.left;
+        const currentTime = this.waveformRenderer.getTimeFromMousePosition(Math.max(0, Math.min(scrollRect.width, x)));
         
         if (!this.dragStarted && Math.abs(currentTime - this.initialClickTime) > 0.1) {
             this.dragStarted = true;

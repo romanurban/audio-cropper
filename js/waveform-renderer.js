@@ -119,73 +119,96 @@ export class WaveformRenderer {
         const visibleRange = this.getVisibleTimeRange();
         const visibleDuration = visibleRange.end - visibleRange.start;
         
-        // Calculate visible chunks
-        const visibleChunks = this.chunks.filter(chunk => 
-            chunk.end > visibleRange.start && chunk.start < visibleRange.end
-        );
-        
-        if (visibleChunks.length === 0) {
-            console.log('No visible chunks in current zoom range');
-            return;
-        }
-        
-        // Calculate total duration of visible chunks for proportional rendering
-        let totalVisibleDuration = 0;
-        visibleChunks.forEach(chunk => {
-            const chunkStart = Math.max(chunk.start, visibleRange.start);
-            const chunkEnd = Math.min(chunk.end, visibleRange.end);
-            totalVisibleDuration += (chunkEnd - chunkStart);
-        });
-        
-        const gapWidth = 4; // pixels between chunks
-        const totalGaps = Math.max(0, visibleChunks.length - 1) * gapWidth;
-        const availableWidth = width - totalGaps;
-        
-        let currentX = 0;
-        
-        // Draw each visible chunk
-        visibleChunks.forEach((chunk) => {
-            const chunkStart = Math.max(chunk.start, visibleRange.start);
-            const chunkEnd = Math.min(chunk.end, visibleRange.end);
-            const visibleChunkDuration = chunkEnd - chunkStart;
+        if (this.zoomLevel > 1.0) {
+            // When zoomed, draw the entire audio across the zoomed canvas width
+            const totalSamples = this.waveformData.length;
+            const barWidth = width / totalSamples;
             
-            if (visibleChunkDuration <= 0) return;
-            
-            const chunkWidthRatio = visibleChunkDuration / totalVisibleDuration;
-            const chunkWidth = availableWidth * chunkWidthRatio;
-            
-            // Calculate which part of the original waveform this visible chunk represents
-            const chunkStartRatio = chunkStart / audioBuffer.duration;
-            const chunkEndRatio = chunkEnd / audioBuffer.duration;
-            const startSample = Math.floor(chunkStartRatio * this.waveformData.length);
-            const endSample = Math.ceil(chunkEndRatio * this.waveformData.length);
-            const chunkSamples = endSample - startSample;
-            
-            if (chunkSamples > 0) {
-                const barWidth = chunkWidth / chunkSamples;
-                
-                // Draw this chunk's waveform
-                for (let i = 0; i < chunkSamples; i++) {
-                    const sampleIndex = startSample + i;
-                    if (sampleIndex < this.waveformData.length) {
-                        this.ctx.fillStyle = '#4CAF50';
-                        
-                        const barHeight = this.waveformData[sampleIndex] * height * 0.8 * this.zoomLevel * 0.5;
-                        const x = currentX + (i * barWidth);
-                        const y = (height - barHeight) / 2;
-                        
-                        // Ensure minimum bar height for visibility
-                        const minHeight = Math.max(1, barHeight);
-                        const actualBarWidth = Math.max(0.5, barWidth - 0.5);
-                        
-                        this.ctx.fillRect(x, y, actualBarWidth, minHeight);
-                    }
+            // Draw all waveform data across the wider canvas
+            for (let i = 0; i < totalSamples; i++) {
+                if (i < this.waveformData.length) {
+                    this.ctx.fillStyle = '#4CAF50';
+                    
+                    const barHeight = this.waveformData[i] * height * 0.8;
+                    const x = i * barWidth;
+                    const y = (height - barHeight) / 2;
+                    
+                    // Ensure minimum bar height for visibility
+                    const minHeight = Math.max(1, barHeight);
+                    const actualBarWidth = Math.max(0.5, barWidth - 0.5);
+                    
+                    this.ctx.fillRect(x, y, actualBarWidth, minHeight);
                 }
             }
+        } else {
+            // When not zoomed, use the original chunk-based rendering
+            const visibleChunks = this.chunks.filter(chunk => 
+                chunk.end > visibleRange.start && chunk.start < visibleRange.end
+            );
             
-            // Move to next chunk position (add gap)
-            currentX += chunkWidth + gapWidth;
-        });
+            if (visibleChunks.length === 0) {
+                console.log('No visible chunks in current zoom range');
+                return;
+            }
+            
+            // Calculate total duration of visible chunks for proportional rendering
+            let totalVisibleDuration = 0;
+            visibleChunks.forEach(chunk => {
+                const chunkStart = Math.max(chunk.start, visibleRange.start);
+                const chunkEnd = Math.min(chunk.end, visibleRange.end);
+                totalVisibleDuration += (chunkEnd - chunkStart);
+            });
+            
+            const gapWidth = 4; // pixels between chunks
+            const totalGaps = Math.max(0, visibleChunks.length - 1) * gapWidth;
+            const availableWidth = width - totalGaps;
+            
+            let currentX = 0;
+            
+            // Draw each visible chunk
+            visibleChunks.forEach((chunk) => {
+                const chunkStart = Math.max(chunk.start, visibleRange.start);
+                const chunkEnd = Math.min(chunk.end, visibleRange.end);
+                const visibleChunkDuration = chunkEnd - chunkStart;
+                
+                if (visibleChunkDuration <= 0) return;
+                
+                const chunkWidthRatio = visibleChunkDuration / totalVisibleDuration;
+                const chunkWidth = availableWidth * chunkWidthRatio;
+                
+                // Calculate which part of the original waveform this visible chunk represents
+                const chunkStartRatio = chunkStart / audioBuffer.duration;
+                const chunkEndRatio = chunkEnd / audioBuffer.duration;
+                const startSample = Math.floor(chunkStartRatio * this.waveformData.length);
+                const endSample = Math.ceil(chunkEndRatio * this.waveformData.length);
+                const chunkSamples = endSample - startSample;
+                
+                if (chunkSamples > 0) {
+                    const barWidth = chunkWidth / chunkSamples;
+                    
+                    // Draw this chunk's waveform
+                    for (let i = 0; i < chunkSamples; i++) {
+                        const sampleIndex = startSample + i;
+                        if (sampleIndex < this.waveformData.length) {
+                            this.ctx.fillStyle = '#4CAF50';
+                            
+                            const barHeight = this.waveformData[sampleIndex] * height * 0.8;
+                            const x = currentX + (i * barWidth);
+                            const y = (height - barHeight) / 2;
+                            
+                            // Ensure minimum bar height for visibility
+                            const minHeight = Math.max(1, barHeight);
+                            const actualBarWidth = Math.max(0.5, barWidth - 0.5);
+                            
+                            this.ctx.fillRect(x, y, actualBarWidth, minHeight);
+                        }
+                    }
+                }
+                
+                // Move to next chunk position (add gap)
+                currentX += chunkWidth + gapWidth;
+            });
+        }
         
         // Draw playback progress line
         this.drawProgressLine(playbackTime, audioBuffer);
@@ -598,12 +621,12 @@ export class WaveformRenderer {
         if (!this.audioBuffer || this.zoomLevel <= 1.0) return;
         
         const scrollLeft = e.target.scrollLeft;
-        const scrollWidth = e.target.scrollWidth;
         const containerWidth = e.target.clientWidth;
-        const maxScroll = scrollWidth - containerWidth;
+        const canvasWidth = containerWidth * this.zoomLevel;
+        const maxScroll = canvasWidth - containerWidth;
         
         if (maxScroll > 0) {
-            // Calculate scroll ratio based on the actual scrollable range
+            // Calculate scroll ratio based on canvas position
             const scrollRatio = scrollLeft / maxScroll;
             
             // Map scroll ratio to audio time offset
@@ -613,10 +636,7 @@ export class WaveformRenderer {
             this.zoomOffset = scrollRatio * maxOffset;
             this.clampZoomOffset();
             
-            // Redraw waveform
-            if (this.audioBuffer) {
-                this.drawWaveform(this.audioBuffer);
-            }
+            // No need to redraw - the canvas content doesn't change, just the view position
         }
     }
 
@@ -624,25 +644,35 @@ export class WaveformRenderer {
      * Updates the scroll container width based on zoom level
      */
     updateScrollWidth() {
-        if (!this.virtualCanvas || !this.audioBuffer) return;
+        if (!this.scrollContainer || !this.audioBuffer) return;
         
         if (this.zoomLevel > 1.0) {
-            // Calculate virtual width precisely to match the actual zoomed content
+            // Make the canvas itself wider when zoomed
             const containerWidth = this.scrollContainer.clientWidth;
-            const virtualWidth = containerWidth * this.zoomLevel;
-            this.virtualCanvas.style.width = virtualWidth + 'px';
+            const canvasWidth = containerWidth * this.zoomLevel;
+            
+            // Set canvas size to zoomed width
+            this.canvas.style.width = canvasWidth + 'px';
+            this.canvas.width = canvasWidth;
+            
+            // Remove virtual canvas as we don't need it
+            if (this.virtualCanvas) {
+                this.virtualCanvas.style.width = '1px';
+            }
             
             // Show scrollbar
-            if (this.scrollContainer) {
-                this.scrollContainer.style.overflowX = 'auto';
-            }
+            this.scrollContainer.style.overflowX = 'auto';
         } else {
-            // No need for scrolling at zoom level 1.0 or less
-            this.virtualCanvas.style.width = '100%';
+            // Reset to normal size when not zoomed
+            const containerWidth = this.scrollContainer.clientWidth;
+            this.canvas.style.width = '100%';
+            this.canvas.width = containerWidth;
             
-            if (this.scrollContainer) {
-                this.scrollContainer.style.overflowX = 'hidden';
+            if (this.virtualCanvas) {
+                this.virtualCanvas.style.width = '100%';
             }
+            
+            this.scrollContainer.style.overflowX = 'hidden';
         }
     }
 
@@ -657,7 +687,9 @@ export class WaveformRenderer {
         
         if (maxOffset > 0) {
             const scrollRatio = Math.min(1, this.zoomOffset / maxOffset);
-            const maxScroll = this.scrollContainer.scrollWidth - this.scrollContainer.clientWidth;
+            const containerWidth = this.scrollContainer.clientWidth;
+            const canvasWidth = containerWidth * this.zoomLevel;
+            const maxScroll = canvasWidth - containerWidth;
             
             // Temporarily remove scroll listener to prevent feedback loop
             this.scrollContainer.removeEventListener('scroll', this.boundScrollHandler);
@@ -672,7 +704,7 @@ export class WaveformRenderer {
 
     /**
      * Converts mouse pixel position to time, accounting for zoom and scroll
-     * @param {number} mouseX - Mouse X coordinate relative to canvas
+     * @param {number} mouseX - Mouse X coordinate relative to visible canvas area
      * @returns {number} Time in seconds
      */
     getTimeFromMousePosition(mouseX) {
@@ -683,17 +715,15 @@ export class WaveformRenderer {
             return this.getTimeFromPixelPosition(mouseX);
         }
         
-        // When zoomed, we need to account for the scroll offset
-        // The visible area shows a portion of the total audio
-        const visibleRange = this.getVisibleTimeRange();
-        const visibleDuration = visibleRange.end - visibleRange.start;
+        // When zoomed, we need to account for the scroll position
+        // mouseX is relative to the visible area, but we need position on the full canvas
+        const scrollLeft = this.scrollContainer ? this.scrollContainer.scrollLeft : 0;
+        const absoluteMouseX = mouseX + scrollLeft;
         const canvasWidth = this.canvas.width;
         
-        // Convert mouse position to time within the visible range
-        const timeRatio = mouseX / canvasWidth;
-        const timeInVisibleRange = timeRatio * visibleDuration;
-        
-        return visibleRange.start + timeInVisibleRange;
+        // Convert absolute position to time across the entire audio
+        const timeRatio = Math.max(0, Math.min(1, absoluteMouseX / canvasWidth));
+        return timeRatio * this.audioBuffer.duration;
     }
 
     /**
@@ -709,18 +739,20 @@ export class WaveformRenderer {
             return this.getPixelPositionForTime(time);
         }
         
-        // When zoomed, check if time is in visible range
-        const visibleRange = this.getVisibleTimeRange();
+        // When zoomed, the canvas contains the entire audio
+        const timeRatio = time / this.audioBuffer.duration;
+        const absolutePixelPosition = timeRatio * this.canvas.width;
         
-        if (time < visibleRange.start || time > visibleRange.end) {
-            return -1; // Not visible
+        // Check if this position is visible in the current scroll view
+        const scrollLeft = this.scrollContainer.scrollLeft;
+        const containerWidth = this.scrollContainer.clientWidth;
+        const relativePosition = absolutePixelPosition - scrollLeft;
+        
+        // Return position relative to visible area, or -1 if not visible
+        if (relativePosition >= 0 && relativePosition <= containerWidth) {
+            return relativePosition;
         }
         
-        // Convert time to pixel position within the visible range
-        const visibleDuration = visibleRange.end - visibleRange.start;
-        const timeInVisibleRange = time - visibleRange.start;
-        const timeRatio = timeInVisibleRange / visibleDuration;
-        
-        return timeRatio * this.canvas.width;
+        return -1; // Not visible
     }
 }
