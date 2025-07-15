@@ -167,6 +167,15 @@ input[type="file"] {
     background: #f57c00;
 }
 
+.btn-info {
+    background: #2196f3;
+    color: white;
+}
+
+.btn-info:hover:not(:disabled) {
+    background: #1976d2;
+}
+
 .info {
     margin-top: 15px;
     padding: 10px;

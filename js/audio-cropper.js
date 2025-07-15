@@ -40,6 +40,8 @@ export class AudioChunkingEditor {
         this.stopBtn = document.getElementById('stopBtn');
         this.splitBtn = document.getElementById('splitBtn');
         this.cropBtn = document.getElementById('cropBtn');
+        this.fadeInBtn = document.getElementById('fadeInBtn');
+        this.fadeOutBtn = document.getElementById('fadeOutBtn');
         this.deleteBtn = document.getElementById('deleteBtn');
         
         // Info displays
@@ -95,6 +97,8 @@ export class AudioChunkingEditor {
         this.stopBtn.addEventListener('click', () => this.stop());
         this.splitBtn.addEventListener('click', () => this.splitAtPosition());
         this.cropBtn.addEventListener('click', () => this.cropAudio());
+        this.fadeInBtn.addEventListener('click', () => this.applyFadeIn());
+        this.fadeOutBtn.addEventListener('click', () => this.applyFadeOut());
         this.deleteBtn.addEventListener('click', () => this.delete());
         
         // Resize
@@ -575,6 +579,7 @@ export class AudioChunkingEditor {
         if (this.selection.start === this.selection.end) {
             this.selectionInfo.textContent = 'No selection';
             this.cropBtn.disabled = true;
+            this.updateFadeButtons();
             return;
         }
         
@@ -588,6 +593,7 @@ export class AudioChunkingEditor {
         if (!startInChunk || !endInChunk) {
             this.selectionInfo.textContent = 'Selection spans deleted chunks';
             this.cropBtn.disabled = true;
+            this.updateFadeButtons();
             return;
         }
         
@@ -596,6 +602,7 @@ export class AudioChunkingEditor {
         const duration = AudioUtils.formatTime(Math.abs(this.selection.end - this.selection.start));
         this.selectionInfo.textContent = `${start} - ${end} (${duration})`;
         this.cropBtn.disabled = false;
+        this.updateFadeButtons();
     }
 
     updateDuration() {
@@ -632,5 +639,89 @@ export class AudioChunkingEditor {
         this.playBtn.disabled = false;
         this.pauseBtn.disabled = false;
         this.stopBtn.disabled = false;
+    }
+
+    applyFadeIn() {
+        if (this.selection.start === this.selection.end) {
+            alert('Please select a region to apply fade in effect');
+            return;
+        }
+
+        const startTime = Math.min(this.selection.start, this.selection.end);
+        const endTime = Math.max(this.selection.start, this.selection.end);
+
+        this.applyFadeEffect(startTime, endTime, 'in');
+    }
+
+    applyFadeOut() {
+        if (this.selection.start === this.selection.end) {
+            alert('Please select a region to apply fade out effect');
+            return;
+        }
+
+        const startTime = Math.min(this.selection.start, this.selection.end);
+        const endTime = Math.max(this.selection.start, this.selection.end);
+
+        this.applyFadeEffect(startTime, endTime, 'out');
+    }
+
+    applyFadeEffect(startTime, endTime, type) {
+        if (!this.audioBuffer) return;
+
+        const sampleRate = this.audioBuffer.sampleRate;
+        const channels = this.audioBuffer.numberOfChannels;
+        const startSample = Math.floor(startTime * sampleRate);
+        const endSample = Math.floor(endTime * sampleRate);
+        const fadeLength = endSample - startSample;
+
+        // Create new buffer with same properties
+        const newBuffer = this.audioContext.createBuffer(channels, this.audioBuffer.length, sampleRate);
+
+        // Copy all audio data first
+        for (let channel = 0; channel < channels; channel++) {
+            const oldData = this.audioBuffer.getChannelData(channel);
+            const newData = newBuffer.getChannelData(channel);
+            
+            // Copy all samples
+            for (let i = 0; i < oldData.length; i++) {
+                newData[i] = oldData[i];
+            }
+
+            // Apply fade effect to the selected region
+            for (let i = startSample; i < endSample; i++) {
+                const fadeProgress = (i - startSample) / fadeLength;
+                let fadeMultiplier;
+
+                if (type === 'in') {
+                    // Fade in: start at 0, end at 1
+                    fadeMultiplier = fadeProgress;
+                } else {
+                    // Fade out: start at 1, end at 0
+                    fadeMultiplier = 1 - fadeProgress;
+                }
+
+                // Apply smooth curve (cosine interpolation)
+                fadeMultiplier = 0.5 * (1 - Math.cos(fadeMultiplier * Math.PI));
+                
+                newData[i] = oldData[i] * fadeMultiplier;
+            }
+        }
+
+        this.audioBuffer = newBuffer;
+        this.waveformRenderer.generateWaveform(this.audioBuffer);
+        
+        // Clear selection after applying fade
+        this.selection.start = 0;
+        this.selection.end = 0;
+        this.selectionDiv.style.display = 'none';
+        this.updateSelectionInfo();
+        this.updateDeleteButton();
+        this.updateFadeButtons();
+    }
+
+    updateFadeButtons() {
+        const hasSelection = this.selection.start !== this.selection.end;
+        this.fadeInBtn.disabled = !hasSelection;
+        this.fadeOutBtn.disabled = !hasSelection;
     }
 }
