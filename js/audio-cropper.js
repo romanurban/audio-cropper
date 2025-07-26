@@ -19,6 +19,7 @@ export class AudioChunkingEditor {
         this.selection = { start: 0, end: 0 };
         this.isDragging = false;
         this.dragStarted = false;
+        this.justFinishedDrag = false;
         this.initialClickTime = 0;
 
         this.initializeElements();
@@ -101,6 +102,9 @@ export class AudioChunkingEditor {
         
         // Resize
         window.addEventListener('resize', () => this.waveformRenderer.resizeCanvas());
+        
+        // Click outside canvas to deselect chunks
+        document.addEventListener('click', (e) => this.handleDocumentClick(e));
     }
 
     async initializeAudioContext() {
@@ -222,6 +226,11 @@ export class AudioChunkingEditor {
     }
 
     handleWaveformClick(event) {
+        // Don't select chunks if we just finished a drag operation
+        if (this.justFinishedDrag) {
+            return;
+        }
+        
         if (this.chunkManager.chunks.length <= 1) {
             return;
         }
@@ -314,6 +323,13 @@ export class AudioChunkingEditor {
         }
         
         this.isDragging = false;
+        
+        // Set flag to prevent click event from selecting chunk after drag
+        if (this.dragStarted) {
+            this.justFinishedDrag = true;
+            setTimeout(() => { this.justFinishedDrag = false; }, 10);
+        }
+        
         this.dragStarted = false;
     }
 
@@ -334,23 +350,25 @@ export class AudioChunkingEditor {
             [this.selection.start, this.selection.end] = [this.selection.end, this.selection.start];
         }
         
-        // Validate selection is within existing chunks
-        const startInChunk = this.chunkManager.chunks.some(chunk => 
-            this.selection.start >= chunk.start && this.selection.start <= chunk.end
-        );
-        const endInChunk = this.chunkManager.chunks.some(chunk => 
-            this.selection.end >= chunk.start && this.selection.end <= chunk.end
-        );
-        
-        if (!startInChunk || !endInChunk) {
-            this.selection.start = 0;
-            this.selection.end = 0;
-            this.selectionDiv.style.display = 'none';
-        }
+        // Allow drag selection to span across any part of the waveform
         
         this.updateSelectionInfo();
         this.updateSelectionDisplay();
         this.updateDeleteButton();
+    }
+
+    handleDocumentClick(event) {
+        // Check if click is outside the waveform canvas
+        if (!this.waveform.contains(event.target)) {
+            // Deselect chunk if one is selected
+            if (this.chunkManager.selectedChunk) {
+                this.chunkManager.selectedChunk = null;
+                this.chunkManager.updateChunkOverlays();
+                this.updateChunkInfo();
+                this.updateDeleteButton();
+                this.updateSelectionInfo();
+            }
+        }
     }
 
     updateSelectionDisplay() {
@@ -613,20 +631,7 @@ export class AudioChunkingEditor {
             return;
         }
         
-        const startInChunk = this.chunkManager.chunks.some(chunk => 
-            this.selection.start >= chunk.start && this.selection.start <= chunk.end
-        );
-        const endInChunk = this.chunkManager.chunks.some(chunk => 
-            this.selection.end >= chunk.start && this.selection.end <= chunk.end
-        );
-        
-        if (!startInChunk || !endInChunk) {
-            this.selectionInfo.textContent = 'Selection spans deleted chunks';
-            this.cropBtn.disabled = !hasChunkSelection;
-            this.updateFadeButtons();
-            return;
-        }
-        
+        // Drag selection (green) has priority - always allow it
         const start = AudioUtils.formatTime(this.selection.start);
         const end = AudioUtils.formatTime(this.selection.end);
         const duration = AudioUtils.formatTime(Math.abs(this.selection.end - this.selection.start));
