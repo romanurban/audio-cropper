@@ -36,7 +36,6 @@ export class AudioChunkingEditor {
         
         // Controls
         this.playBtn = document.getElementById('playBtn');
-        this.pauseBtn = document.getElementById('pauseBtn');
         this.stopBtn = document.getElementById('stopBtn');
         this.splitBtn = document.getElementById('splitBtn');
         this.cropBtn = document.getElementById('cropBtn');
@@ -92,8 +91,7 @@ export class AudioChunkingEditor {
         this.waveform.addEventListener('click', (e) => this.handleWaveformClick(e));
         
         // Controls
-        this.playBtn.addEventListener('click', () => this.play());
-        this.pauseBtn.addEventListener('click', () => this.pause());
+        this.playBtn.addEventListener('click', () => this.togglePlayPause());
         this.stopBtn.addEventListener('click', () => this.stop());
         this.splitBtn.addEventListener('click', () => this.splitAtPosition());
         this.cropBtn.addEventListener('click', () => this.cropAudio());
@@ -239,10 +237,16 @@ export class AudioChunkingEditor {
         );
         
         if (selectedChunk) {
+            // Clear drag selection when selecting a chunk
+            this.selection.start = 0;
+            this.selection.end = 0;
+            this.selectionDiv.style.display = 'none';
+            
             this.chunkManager.selectedChunk = selectedChunk;
             this.chunkManager.updateChunkOverlays();
             this.updateChunkInfo();
             this.updateDeleteButton();
+            this.updateSelectionInfo();
         }
     }
 
@@ -279,6 +283,10 @@ export class AudioChunkingEditor {
         
         if (!this.dragStarted && Math.abs(currentTime - this.initialClickTime) > 0.1) {
             this.dragStarted = true;
+            // Clear chunk selection when starting drag selection
+            this.chunkManager.selectedChunk = null;
+            this.chunkManager.updateChunkOverlays();
+            this.updateChunkInfo();
         }
         
         if (this.dragStarted) {
@@ -493,9 +501,16 @@ export class AudioChunkingEditor {
             await this.audioPlayer.playAllChunks(this.audioBuffer, this.chunkManager.chunks);
         }
         
-        this.playBtn.textContent = '⏸️ Playing...';
-        this.pauseBtn.disabled = false;
+        this.playBtn.textContent = '⏸️ Pause';
         this.animateProgress();
+    }
+
+    togglePlayPause() {
+        if (this.audioPlayer.isPlaying) {
+            this.pause();
+        } else {
+            this.play();
+        }
     }
 
     pause() {
@@ -503,7 +518,6 @@ export class AudioChunkingEditor {
         
         this.audioPlayer.pause();
         this.playBtn.textContent = '▶️ Play';
-        this.pauseBtn.disabled = true;
         
         this.waveformRenderer.drawWaveform(this.audioBuffer, this.seekPosition, this.audioPlayer.getCurrentPlaybackTime());
         this.updateCurrentTime();
@@ -512,14 +526,17 @@ export class AudioChunkingEditor {
     stop() {
         this.audioPlayer.stop(this.chunkManager.chunks);
         this.playBtn.textContent = '▶️ Play';
-        this.pauseBtn.disabled = true;
         
         this.waveformRenderer.drawWaveform(this.audioBuffer, this.seekPosition, this.audioPlayer.getCurrentPlaybackTime());
         this.updateCurrentTime();
     }
 
     animateProgress() {
-        if (!this.audioPlayer.isPlaying) return;
+        if (!this.audioPlayer.isPlaying) {
+            // Reset play button when audio stops
+            this.playBtn.textContent = '▶️ Play';
+            return;
+        }
         
         this.waveformRenderer.drawWaveform(this.audioBuffer, this.seekPosition, this.audioPlayer.getCurrentPlaybackTime());
         this.updateCurrentTime();
@@ -527,14 +544,24 @@ export class AudioChunkingEditor {
     }
 
     async cropAudio() {
-        if (this.selection.start === this.selection.end) {
-            alert('Please select a portion of the audio to crop');
+        let start, end;
+        
+        // Determine what to crop: region selection or selected chunk
+        const hasRegionSelection = this.selection.start !== this.selection.end;
+        const hasChunkSelection = this.chunkManager.selectedChunk !== null;
+        
+        if (hasRegionSelection) {
+            start = Math.min(this.selection.start, this.selection.end);
+            end = Math.max(this.selection.start, this.selection.end);
+        } else if (hasChunkSelection) {
+            start = this.chunkManager.selectedChunk.start;
+            end = this.chunkManager.selectedChunk.end;
+        } else {
+            alert('Please select a portion of the audio to crop or select a chunk');
             return;
         }
         
         try {
-            const start = Math.min(this.selection.start, this.selection.end);
-            const end = Math.max(this.selection.start, this.selection.end);
             
             this.cropBtn.textContent = '🔄 Processing...';
             this.cropBtn.disabled = true;
@@ -576,9 +603,12 @@ export class AudioChunkingEditor {
     }
 
     updateSelectionInfo() {
-        if (this.selection.start === this.selection.end) {
+        const hasRegionSelection = this.selection.start !== this.selection.end;
+        const hasChunkSelection = this.chunkManager.selectedChunk !== null;
+        
+        if (!hasRegionSelection) {
             this.selectionInfo.textContent = 'No selection';
-            this.cropBtn.disabled = true;
+            this.cropBtn.disabled = !hasChunkSelection;
             this.updateFadeButtons();
             return;
         }
@@ -592,7 +622,7 @@ export class AudioChunkingEditor {
         
         if (!startInChunk || !endInChunk) {
             this.selectionInfo.textContent = 'Selection spans deleted chunks';
-            this.cropBtn.disabled = true;
+            this.cropBtn.disabled = !hasChunkSelection;
             this.updateFadeButtons();
             return;
         }
@@ -637,8 +667,10 @@ export class AudioChunkingEditor {
 
     enableControls() {
         this.playBtn.disabled = false;
-        this.pauseBtn.disabled = false;
         this.stopBtn.disabled = false;
+        this.splitBtn.disabled = false;
+        this.updateSelectionInfo();
+        this.updateFadeButtons();
     }
 
     applyFadeIn() {
