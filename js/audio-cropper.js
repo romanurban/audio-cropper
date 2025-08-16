@@ -374,6 +374,41 @@ export class AudioChunkingEditor {
     updateSelectionDisplay() {
         if (!this.audioBuffer || this.chunkManager.chunks.length === 0) return;
         
+        // When zoomed, use canvas-based coordinate system
+        if (this.waveformRenderer.zoomLevel > 1.0) {
+            const startX = this.waveformRenderer.getPixelPositionForTimeZoomed(this.selection.start);
+            const endX = this.waveformRenderer.getPixelPositionForTimeZoomed(this.selection.end);
+            
+            if (startX >= 0 && endX >= 0) {
+                const leftX = Math.min(startX, endX);
+                const rightX = Math.max(startX, endX);
+                
+                // Get the scroll container rect for positioning the selection div
+                const containerRect = this.waveformRenderer.scrollContainer.getBoundingClientRect();
+                const scrollLeft = this.waveformRenderer.scrollContainer.scrollLeft;
+                
+                // Convert absolute canvas positions to visible container positions
+                const visibleLeftX = leftX - scrollLeft;
+                const visibleRightX = rightX - scrollLeft;
+                
+                // Only show selection if it's at least partially visible
+                if (visibleRightX >= 0 && visibleLeftX <= containerRect.width) {
+                    const clampedLeftX = Math.max(0, visibleLeftX);
+                    const clampedRightX = Math.min(containerRect.width, visibleRightX);
+                    
+                    this.selectionDiv.style.left = (clampedLeftX / containerRect.width * 100) + '%';
+                    this.selectionDiv.style.width = ((clampedRightX - clampedLeftX) / containerRect.width * 100) + '%';
+                    this.selectionDiv.style.display = 'block';
+                } else {
+                    this.selectionDiv.style.display = 'none';
+                }
+            } else {
+                this.selectionDiv.style.display = 'none';
+            }
+            return;
+        }
+        
+        // When not zoomed, use the original chunk-based rendering
         const totalChunkDuration = this.chunkManager.chunks.reduce((sum, chunk) => sum + (chunk.end - chunk.start), 0);
         const gapWidth = 4;
         const totalGaps = Math.max(0, this.chunkManager.chunks.length - 1) * gapWidth;
