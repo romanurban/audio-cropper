@@ -227,15 +227,13 @@ export class WaveformRenderer {
     drawProgressLine(currentTime, audioBuffer) {
         if (!audioBuffer) return;
         
-        const progressX = this.getPixelPositionForTimeZoomed(currentTime);
-        
-        // Only draw if the time is visible in current zoom range
-        if (progressX >= 0) {
+        const x = this.getPixelPositionForTimeZoomed(currentTime);
+        if (x >= 0 && x <= this.canvas.width) {
             this.ctx.strokeStyle = '#FFD700';
             this.ctx.lineWidth = 2;
             this.ctx.beginPath();
-            this.ctx.moveTo(progressX, 0);
-            this.ctx.lineTo(progressX, this.canvas.height);
+            this.ctx.moveTo(x, 0);
+            this.ctx.lineTo(x, this.canvas.height);
             this.ctx.stroke();
         }
     }
@@ -248,16 +246,14 @@ export class WaveformRenderer {
     drawSeekLine(seekPosition, audioBuffer) {
         if (!audioBuffer) return;
         
-        const seekX = this.getPixelPositionForTimeZoomed(seekPosition);
-        
-        // Only draw if the time is visible in current zoom range
-        if (seekX >= 0) {
+        const x = this.getPixelPositionForTimeZoomed(seekPosition);
+        if (x >= 0 && x <= this.canvas.width) {
             this.ctx.strokeStyle = '#FF6B6B';
             this.ctx.lineWidth = 1;
             this.ctx.setLineDash([5, 5]);
             this.ctx.beginPath();
-            this.ctx.moveTo(seekX, 0);
-            this.ctx.lineTo(seekX, this.canvas.height);
+            this.ctx.moveTo(x, 0);
+            this.ctx.lineTo(x, this.canvas.height);
             this.ctx.stroke();
             this.ctx.setLineDash([]); // Reset line dash
         }
@@ -719,15 +715,10 @@ export class WaveformRenderer {
             return this.getTimeFromPixelPosition(mouseX);
         }
         
-        // When zoomed, mouseX is relative to the actual canvas element
-        // which spans the full width of the zoomed audio
-        const canvasWidth = this.canvas.width;
-        
-        // Clamp the position to valid canvas bounds
-        const clampedX = Math.max(0, Math.min(canvasWidth, mouseX));
-        
-        // Convert position to time across the entire audio
-        const timeRatio = clampedX / canvasWidth;
+        // When zoomed, mouseX is relative to the canvas (its rect already includes scroll)
+        const totalWidth = this.canvas.width;
+        const clampedX = Math.max(0, Math.min(totalWidth, mouseX));
+        const timeRatio = clampedX / totalWidth;
         return timeRatio * this.audioBuffer.duration;
     }
 
@@ -745,20 +736,8 @@ export class WaveformRenderer {
             return this.getPixelPositionForTime(time);
         }
         
-        // When zoomed, the canvas contains the entire audio
-        const timeRatio = time / this.audioBuffer.duration;
-        const absolutePixelPosition = timeRatio * this.canvas.width;
-        
-        // Check if this position is visible in the current scroll view
-        const scrollLeft = this.scrollContainer.scrollLeft;
-        const containerWidth = this.scrollContainer.clientWidth;
-        const relativePosition = absolutePixelPosition - scrollLeft;
-        
-        // Return position relative to visible area, or -1 if not visible
-        if (relativePosition >= 0 && relativePosition <= containerWidth) {
-            return relativePosition;
-        }
-        
-        return -1; // Not visible
+        // When zoomed, return absolute canvas X position
+        const totalWidth = this.canvas.width;
+        return (Math.max(0, Math.min(1, time / this.audioBuffer.duration))) * totalWidth;
     }
 }

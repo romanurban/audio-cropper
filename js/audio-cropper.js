@@ -236,8 +236,8 @@ export class AudioChunkingEditor {
         }
         
         // Get coordinates relative to the canvas
-        const canvasRect = this.canvas.getBoundingClientRect();
-        const x = event.clientX - canvasRect.left;
+        const rect = this.canvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
         const clickTime = this.waveformRenderer.getTimeFromMousePosition(x);
         
         // Find which chunk was clicked based on time
@@ -264,8 +264,8 @@ export class AudioChunkingEditor {
         this.dragStarted = false;
         
         // Get coordinates relative to the canvas
-        const canvasRect = this.canvas.getBoundingClientRect();
-        const x = event.clientX - canvasRect.left;
+        const rect = this.canvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
         
         const clickTime = this.waveformRenderer.getTimeFromMousePosition(x);
         
@@ -286,8 +286,8 @@ export class AudioChunkingEditor {
         if (!this.isDragging) return;
         
         // Get coordinates relative to the canvas
-        const canvasRect = this.canvas.getBoundingClientRect();
-        const x = event.clientX - canvasRect.left;
+        const rect = this.canvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
         const currentTime = this.waveformRenderer.getTimeFromMousePosition(x);
         
         if (!this.dragStarted && Math.abs(currentTime - this.initialClickTime) > 0.1) {
