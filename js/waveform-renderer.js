@@ -102,8 +102,9 @@ export class WaveformRenderer {
      * @param {AudioBuffer} audioBuffer - The audio buffer for duration reference
      * @param {number} seekPosition - Current seek position
      * @param {number} playbackTime - Current playback time
+     * @param {object} selection - Selection object with start and end times
      */
-    drawWaveform(audioBuffer, seekPosition = 0, playbackTime = 0) {
+    drawWaveform(audioBuffer, seekPosition = 0, playbackTime = 0, selection = null) {
         if (!this.waveformData || !this.canvas || this.canvas.width <= 0 || this.canvas.height <= 0) {
             console.warn('Cannot draw waveform - invalid state');
             return;
@@ -131,7 +132,8 @@ export class WaveformRenderer {
                     
                     const barHeight = this.waveformData[i] * height * 0.8;
                     const x = i * barWidth;
-                    const y = (height - barHeight) / 2;
+                    const waveformAreaHeight = height - 25; // Leave space for time scale at top
+                    const y = 25 + (waveformAreaHeight - barHeight) / 2;
                     
                     // Ensure minimum bar height for visibility
                     const minHeight = Math.max(1, barHeight);
@@ -194,7 +196,8 @@ export class WaveformRenderer {
                             
                             const barHeight = this.waveformData[sampleIndex] * height * 0.8;
                             const x = currentX + (i * barWidth);
-                            const y = (height - barHeight) / 2;
+                            const waveformAreaHeight = height - 25; // Leave space for time scale at top
+                            const y = 25 + (waveformAreaHeight - barHeight) / 2;
                             
                             // Ensure minimum bar height for visibility
                             const minHeight = Math.max(1, barHeight);
@@ -208,6 +211,14 @@ export class WaveformRenderer {
                 // Move to next chunk position (add gap)
                 currentX += chunkWidth + gapWidth;
             });
+        }
+        
+        // Draw time scale at bottom
+        this.drawTimeScale(audioBuffer);
+        
+        // Draw selection labels if there's a selection
+        if (selection && selection.start !== selection.end) {
+            this.drawSelectionLabels(selection.start, selection.end);
         }
         
         // Draw playback progress line
@@ -232,9 +243,12 @@ export class WaveformRenderer {
             this.ctx.strokeStyle = '#FFD700';
             this.ctx.lineWidth = 2;
             this.ctx.beginPath();
-            this.ctx.moveTo(x, 0);
+            this.ctx.moveTo(x, 25); // Start below time scale
             this.ctx.lineTo(x, this.canvas.height);
             this.ctx.stroke();
+            
+            // Draw time label for progress line
+            this.drawTimeLabel(x, currentTime, '#FFD700', 'Progress');
         }
     }
 
@@ -252,10 +266,285 @@ export class WaveformRenderer {
             this.ctx.lineWidth = 1;
             this.ctx.setLineDash([5, 5]);
             this.ctx.beginPath();
-            this.ctx.moveTo(x, 0);
+            this.ctx.moveTo(x, 25); // Start below time scale
             this.ctx.lineTo(x, this.canvas.height);
             this.ctx.stroke();
             this.ctx.setLineDash([]); // Reset line dash
+            
+            // Draw time label for seek line
+            this.drawTimeLabel(x, seekPosition, '#FF6B6B', 'Seek');
+        }
+    }
+
+    /**
+     * Draws a time label for a specific position
+     * @param {number} x - X position on canvas
+     * @param {number} time - Time in seconds
+     * @param {string} color - Color for the label
+     * @param {string} label - Label type (Progress, Seek, etc.)
+     */
+    drawTimeLabel(x, time, color, label) {
+        const timeText = this.formatTimeLabel(time);
+        const labelText = `${label}: ${timeText}`;
+        
+        // Set font and style
+        this.ctx.font = 'bold 11px Arial';
+        this.ctx.fillStyle = color;
+        
+        // Measure text for background
+        const textWidth = this.ctx.measureText(labelText).width;
+        const padding = 4;
+        const labelHeight = 16;
+        
+        // Position label in the waveform area (middle of canvas)
+        let labelX = x - textWidth/2;
+        const labelY = this.canvas.height / 2;
+        
+        // Keep label within canvas bounds
+        if (labelX < 5) labelX = 5;
+        if (labelX + textWidth > this.canvas.width - 5) {
+            labelX = this.canvas.width - textWidth - 5;
+        }
+        
+        // Draw background
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        this.ctx.fillRect(labelX - padding, labelY - labelHeight + 2, textWidth + padding*2, labelHeight);
+        
+        // Draw border
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(labelX - padding, labelY - labelHeight + 2, textWidth + padding*2, labelHeight);
+        
+        // Draw text
+        this.ctx.fillStyle = color;
+        this.ctx.fillText(labelText, labelX, labelY - 2);
+    }
+
+    /**
+     * Draws selection time labels
+     * @param {number} startTime - Selection start time
+     * @param {number} endTime - Selection end time
+     */
+    drawSelectionLabels(startTime, endTime) {
+        if (!this.audioBuffer || startTime === endTime) return;
+        
+        const startX = this.getPixelPositionForTimeZoomed(startTime);
+        const endX = this.getPixelPositionForTimeZoomed(endTime);
+        
+        // Draw start time label
+        if (startX >= 0 && startX <= this.canvas.width) {
+            this.drawTimeLabel(startX, startTime, '#4CAF50', 'Start');
+        }
+        
+        // Draw end time label
+        if (endX >= 0 && endX <= this.canvas.width) {
+            this.drawTimeLabel(endX, endTime, '#4CAF50', 'End');
+        }
+        
+        // Draw duration in the middle if both points are visible
+        if (startX >= 0 && endX >= 0 && startX <= this.canvas.width && endX <= this.canvas.width) {
+            const midX = (startX + endX) / 2;
+            const duration = Math.abs(endTime - startTime);
+            const durationText = `Duration: ${this.formatTimeLabel(duration)}`;
+            
+            this.ctx.font = 'bold 12px Arial';
+            this.ctx.fillStyle = '#4CAF50';
+            
+            const textWidth = this.ctx.measureText(durationText).width;
+            const padding = 6;
+            const labelHeight = 18;
+            
+            let labelX = midX - textWidth/2;
+            const labelY = 30;
+            
+            // Keep label within canvas bounds
+            if (labelX < 5) labelX = 5;
+            if (labelX + textWidth > this.canvas.width - 5) {
+                labelX = this.canvas.width - textWidth - 5;
+            }
+            
+            // Draw background
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+            this.ctx.fillRect(labelX - padding, labelY - labelHeight + 2, textWidth + padding*2, labelHeight);
+            
+            // Draw border
+            this.ctx.strokeStyle = '#4CAF50';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(labelX - padding, labelY - labelHeight + 2, textWidth + padding*2, labelHeight);
+            
+            // Draw text
+            this.ctx.fillStyle = '#4CAF50';
+            this.ctx.fillText(durationText, labelX, labelY - 2);
+        }
+    }
+
+    /**
+     * Draws time scale at the bottom of the canvas
+     * @param {AudioBuffer} audioBuffer - Audio buffer for duration reference
+     */
+    drawTimeScale(audioBuffer) {
+        if (!audioBuffer) return;
+        
+        const height = this.canvas.height;
+        const width = this.canvas.width;
+        const timeScaleHeight = 20; // Height reserved for time scale
+        const timeScaleTop = 0; // Position at canvas top
+        const tickHeight = 6;
+        
+        // Set font and style for time labels
+        this.ctx.font = '10px Arial';
+        this.ctx.fillStyle = '#666';
+        this.ctx.strokeStyle = '#666';
+        this.ctx.lineWidth = 1;
+        
+        if (this.zoomLevel > 1.0) {
+            // When zoomed, show time markers across the entire audio duration
+            const totalDuration = audioBuffer.duration;
+            
+            // Calculate appropriate interval based on zoom level and canvas width
+            let interval = this.calculateTimeInterval(totalDuration, width);
+            
+            // Draw time markers
+            for (let time = 0; time <= totalDuration; time += interval) {
+                const x = this.getPixelPositionForTimeZoomed(time);
+                
+                if (x >= 0 && x <= width) {
+                    // Draw tick mark
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x, timeScaleTop + timeScaleHeight);
+                    this.ctx.lineTo(x, timeScaleTop + timeScaleHeight - tickHeight);
+                    this.ctx.stroke();
+                    
+                    // Draw time label
+                    const timeLabel = this.formatTimeLabel(time);
+                    const textWidth = this.ctx.measureText(timeLabel).width;
+                    this.ctx.fillText(timeLabel, x - textWidth/2, timeScaleTop + 16);
+                }
+            }
+            
+            // Draw baseline
+            this.ctx.beginPath();
+            this.ctx.moveTo(0, timeScaleTop + timeScaleHeight);
+            this.ctx.lineTo(width, timeScaleTop + timeScaleHeight);
+            this.ctx.stroke();
+            
+        } else {
+            // When not zoomed, show time markers based on visible chunks
+            const visibleRange = this.getVisibleTimeRange();
+            const visibleChunks = this.chunks.filter(chunk => 
+                chunk.end > visibleRange.start && chunk.start < visibleRange.end
+            );
+            
+            if (visibleChunks.length === 0) return;
+            
+            let totalVisibleDuration = 0;
+            visibleChunks.forEach(chunk => {
+                const chunkStart = Math.max(chunk.start, visibleRange.start);
+                const chunkEnd = Math.min(chunk.end, visibleRange.end);
+                totalVisibleDuration += (chunkEnd - chunkStart);
+            });
+            
+            const gapWidth = 4;
+            const totalGaps = Math.max(0, visibleChunks.length - 1) * gapWidth;
+            const availableWidth = width - totalGaps;
+            
+            let currentX = 0;
+            
+            // Draw time markers for each chunk
+            visibleChunks.forEach((chunk) => {
+                const chunkStart = Math.max(chunk.start, visibleRange.start);
+                const chunkEnd = Math.min(chunk.end, visibleRange.end);
+                const visibleChunkDuration = chunkEnd - chunkStart;
+                
+                if (visibleChunkDuration <= 0) return;
+                
+                const chunkWidthRatio = visibleChunkDuration / totalVisibleDuration;
+                const chunkWidth = availableWidth * chunkWidthRatio;
+                
+                // Calculate appropriate interval for this chunk
+                const interval = this.calculateTimeInterval(visibleChunkDuration, chunkWidth);
+                
+                // Draw time markers within this chunk
+                for (let time = chunkStart; time <= chunkEnd; time += interval) {
+                    if (time > chunkEnd) break;
+                    
+                    const timeInChunk = time - chunkStart;
+                    const progressInChunk = timeInChunk / visibleChunkDuration;
+                    const x = currentX + (progressInChunk * chunkWidth);
+                    
+                    // Draw tick mark
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x, timeScaleTop + timeScaleHeight);
+                    this.ctx.lineTo(x, timeScaleTop + timeScaleHeight - tickHeight);
+                    this.ctx.stroke();
+                    
+                    // Draw time label
+                    const timeLabel = this.formatTimeLabel(time);
+                    const textWidth = this.ctx.measureText(timeLabel).width;
+                    if (x - textWidth/2 >= currentX && x + textWidth/2 <= currentX + chunkWidth) {
+                        this.ctx.fillText(timeLabel, x - textWidth/2, timeScaleTop + 16);
+                    }
+                }
+                
+                // Draw chunk baseline
+                this.ctx.beginPath();
+                this.ctx.moveTo(currentX, timeScaleTop + timeScaleHeight);
+                this.ctx.lineTo(currentX + chunkWidth, timeScaleTop + timeScaleHeight);
+                this.ctx.stroke();
+                
+                currentX += chunkWidth + gapWidth;
+            });
+        }
+    }
+
+    /**
+     * Calculates appropriate time interval for markers based on duration and width
+     * @param {number} duration - Time duration to display
+     * @param {number} width - Pixel width available
+     * @returns {number} Time interval in seconds
+     */
+    calculateTimeInterval(duration, width) {
+        const minPixelsBetweenMarkers = 50; // Minimum pixels between time markers
+        const maxMarkers = Math.floor(width / minPixelsBetweenMarkers);
+        
+        if (maxMarkers <= 0) return duration;
+        
+        const roughInterval = duration / maxMarkers;
+        
+        // Round to nice intervals (1, 2, 5, 10, 15, 30 seconds, 1, 2, 5 minutes, etc.)
+        const niceIntervals = [
+            0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 
+            60, 120, 300, 600, 900, 1800, 3600
+        ];
+        
+        for (let interval of niceIntervals) {
+            if (interval >= roughInterval) {
+                return interval;
+            }
+        }
+        
+        // For very long durations, use hour-based intervals
+        return Math.ceil(roughInterval / 3600) * 3600;
+    }
+
+    /**
+     * Formats time for display on time scale
+     * @param {number} time - Time in seconds
+     * @returns {string} Formatted time string
+     */
+    formatTimeLabel(time) {
+        const minutes = Math.floor(time / 60);
+        const seconds = Math.floor(time % 60);
+        const decimals = Math.floor((time % 1) * 10);
+        
+        if (minutes === 0) {
+            if (time < 10) {
+                return `${seconds}.${decimals}s`;
+            } else {
+                return `${seconds}s`;
+            }
+        } else {
+            return `${minutes}:${seconds.toString().padStart(2, '0')}`;
         }
     }
 
@@ -368,31 +657,24 @@ export class WaveformRenderer {
     setupScrollContainer() {
         if (!this.canvas.parentElement) return;
         
-        // Create scroll container wrapper
-        this.scrollContainer = document.createElement('div');
-        this.scrollContainer.className = 'waveform-scroll-container';
+        console.log('Setting up scroll container, canvas parent:', this.canvas.parentElement.className);
         
-        // Set up container styles
-        this.scrollContainer.style.width = '100%';
-        this.scrollContainer.style.height = '100%';
+        // Use the existing waveform container directly as scroll container
+        this.scrollContainer = this.canvas.parentElement;
         this.scrollContainer.style.overflowX = 'auto';
         this.scrollContainer.style.overflowY = 'hidden';
-        this.scrollContainer.style.position = 'relative';
         
-        // Create virtual canvas for scroll width
-        this.virtualCanvas = document.createElement('div');
-        this.virtualCanvas.className = 'virtual-canvas';
-        this.virtualCanvas.style.height = '1px';
-        this.virtualCanvas.style.width = '100%';
-        this.virtualCanvas.style.position = 'absolute';
-        this.virtualCanvas.style.top = '0';
-        this.virtualCanvas.style.pointerEvents = 'none';
+        // Force the scrollbar styles to be applied
+        this.scrollContainer.style.setProperty('--webkit-scrollbar-height', '14px');
         
-        // Insert scroll container between parent and canvas
-        const parent = this.canvas.parentElement;
-        parent.insertBefore(this.scrollContainer, this.canvas);
-        this.scrollContainer.appendChild(this.canvas);
-        this.scrollContainer.appendChild(this.virtualCanvas);
+        // Add a CSS class to ensure scrollbar styling is applied
+        this.scrollContainer.classList.add('styled-scrollbar');
+        
+        // Inject scrollbar styles dynamically as a fallback
+        this.injectScrollbarStyles();
+        
+        console.log('Scroll container setup complete:', this.scrollContainer.className);
+        console.log('Computed overflow-x:', window.getComputedStyle(this.scrollContainer).overflowX);
         
         // Set up scroll event listener with bound handler for removal
         this.boundScrollHandler = (e) => this.handleHorizontalScroll(e);
@@ -403,31 +685,65 @@ export class WaveformRenderer {
     }
 
     /**
+     * Injects scrollbar styles dynamically to ensure they're applied
+     */
+    injectScrollbarStyles() {
+        // Check if styles are already injected
+        if (document.getElementById('dynamic-scrollbar-styles')) return;
+        
+        const style = document.createElement('style');
+        style.id = 'dynamic-scrollbar-styles';
+        style.textContent = `
+            .waveform::-webkit-scrollbar,
+            .styled-scrollbar::-webkit-scrollbar {
+                height: 14px !important;
+            }
+            
+            .waveform::-webkit-scrollbar-track,
+            .styled-scrollbar::-webkit-scrollbar-track {
+                background: #1a1a1a !important;
+                border-radius: 7px !important;
+                border: 1px solid #333 !important;
+                margin: 0 4px !important;
+            }
+            
+            .waveform::-webkit-scrollbar-thumb,
+            .styled-scrollbar::-webkit-scrollbar-thumb {
+                background: linear-gradient(45deg, #4CAF50, #45a049) !important;
+                border-radius: 7px !important;
+                border: 1px solid #2d2d2d !important;
+                box-shadow: inset 0 1px 2px rgba(76, 175, 80, 0.3) !important;
+            }
+            
+            .waveform::-webkit-scrollbar-thumb:hover,
+            .styled-scrollbar::-webkit-scrollbar-thumb:hover {
+                background: linear-gradient(45deg, #45a049, #66BB6A) !important;
+                box-shadow: inset 0 1px 2px rgba(76, 175, 80, 0.5) !important;
+            }
+            
+            .waveform::-webkit-scrollbar-thumb:active,
+            .styled-scrollbar::-webkit-scrollbar-thumb:active {
+                background: linear-gradient(45deg, #388E3C, #4CAF50) !important;
+                box-shadow: inset 0 1px 2px rgba(76, 175, 80, 0.7) !important;
+            }
+        `;
+        
+        document.head.appendChild(style);
+        console.log('Dynamic scrollbar styles injected');
+    }
+
+    /**
      * Sets up zoom control overlays
      */
     setupZoomControls() {
-        // Find the waveform container (not the scroll container)
-        const waveformContainer = this.canvas.closest('.waveform');
-        if (!waveformContainer) return;
+        // Find the zoom controls in the instructions strip
+        this.zoomControls = document.querySelector('.zoom-controls-strip');
+        if (!this.zoomControls) {
+            console.warn('Zoom controls strip not found');
+            return;
+        }
         
-        // Create zoom controls container
-        this.zoomControls = document.createElement('div');
-        this.zoomControls.className = 'zoom-controls';
-        this.zoomControls.innerHTML = `
-            <button class="zoom-btn zoom-in" title="Zoom In">+</button>
-            <button class="zoom-btn zoom-out" title="Zoom Out">−</button>
-            <button class="zoom-btn zoom-reset" title="Reset Zoom">⌂</button>
-        `;
-        
-        // Set higher z-index and pointer events
-        this.zoomControls.style.pointerEvents = 'auto';
-        this.zoomControls.style.zIndex = '1000';
-        this.zoomControls.style.position = 'absolute';
-        this.zoomControls.style.top = '10px';
-        this.zoomControls.style.right = '10px';
-        
-        // Append to waveform container so it stays fixed
-        waveformContainer.appendChild(this.zoomControls);
+        console.log('Zoom controls found in strip');
         
         // Add event listeners for zoom buttons
         this.setupZoomButtonListeners();
@@ -523,6 +839,8 @@ export class WaveformRenderer {
         const newZoom = direction > 0 ? 
             Math.min(this.maxZoom, this.zoomLevel * this.zoomStep) :
             Math.max(this.minZoom, this.zoomLevel / this.zoomStep);
+        
+        console.log('handleZoom called: direction=', direction, 'oldZoom=', oldZoom, 'newZoom=', newZoom);
         
         if (newZoom === oldZoom) return;
         
@@ -640,39 +958,27 @@ export class WaveformRenderer {
      * Updates the scroll container width based on zoom level
      */
     updateScrollWidth() {
+        console.log('updateScrollWidth called: scrollContainer=', !!this.scrollContainer, 'audioBuffer=', !!this.audioBuffer, 'zoomLevel=', this.zoomLevel);
         if (!this.scrollContainer || !this.audioBuffer) return;
         
         if (this.zoomLevel > 1.0) {
-            // Make the canvas itself wider when zoomed
+            // Simple approach: make canvas wider than its container
             const containerWidth = this.scrollContainer.clientWidth;
-            const canvasWidth = containerWidth * this.zoomLevel;
+            const canvasWidth = Math.floor(containerWidth * this.zoomLevel);
             
-            // Set canvas size to zoomed width
+            // Set canvas to be wider than container to trigger horizontal scrollbar
             this.canvas.style.width = canvasWidth + 'px';
-            this.canvas.style.minWidth = canvasWidth + 'px';
             this.canvas.width = canvasWidth;
             
-            // Ensure the virtual canvas creates the scroll area
-            if (this.virtualCanvas) {
-                this.virtualCanvas.style.width = canvasWidth + 'px';
-                this.virtualCanvas.style.minWidth = canvasWidth + 'px';
-            }
-            
-            // Show scrollbar
-            this.scrollContainer.style.overflowX = 'auto';
+            console.log('Zoom update: containerWidth=', containerWidth, 'canvasWidth=', canvasWidth, 'zoomLevel=', this.zoomLevel);
+            console.log('After update - ScrollContainer scrollWidth:', this.scrollContainer.scrollWidth, 'clientWidth:', this.scrollContainer.clientWidth);
         } else {
             // Reset to normal size when not zoomed
             const containerWidth = this.scrollContainer.clientWidth;
+            
+            // Reset canvas to container width
             this.canvas.style.width = '100%';
-            this.canvas.style.minWidth = 'auto';
             this.canvas.width = containerWidth;
-            
-            if (this.virtualCanvas) {
-                this.virtualCanvas.style.width = '100%';
-                this.virtualCanvas.style.minWidth = 'auto';
-            }
-            
-            this.scrollContainer.style.overflowX = 'hidden';
         }
     }
 

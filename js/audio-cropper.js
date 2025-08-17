@@ -303,7 +303,7 @@ export class AudioChunkingEditor {
             this.updateSelectionDisplay();
         } else {
             this.seekPosition = currentTime;
-            this.waveformRenderer.drawWaveform(this.audioBuffer, this.seekPosition, this.audioPlayer.getCurrentPlaybackTime());
+            this.waveformRenderer.drawWaveform(this.audioBuffer, this.seekPosition, this.audioPlayer.getCurrentPlaybackTime(), this.selection);
         }
     }
 
