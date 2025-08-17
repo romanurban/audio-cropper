@@ -290,50 +290,58 @@ input[type="file"] {
 
 .zoom-controls-strip {
     display: flex;
-    gap: 4px;
+    gap: 6px;
     align-items: center;
+    padding: 8px 12px;
+    background: rgba(76, 175, 80, 0.03);
+    border: 1px solid rgba(76, 175, 80, 0.2);
+    border-radius: 6px;
+    backdrop-filter: blur(2px);
 }
 
 .play-progress-position {
-    margin-left: 12px;
-    padding: 4px 8px;
-    background: rgba(255, 87, 34, 0.2);
-    border: 1px solid #FF5722;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: bold;
+    margin-left: 8px;
+    padding: 3px 6px;
+    background: rgba(255, 87, 34, 0.1);
+    border: 1px solid rgba(255, 87, 34, 0.3);
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 500;
     color: #FF5722;
-    min-width: 70px;
+    min-width: 60px;
     text-align: center;
     display: none;
+    font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
 }
 
 .hover-position {
-    margin-left: 8px;
-    padding: 4px 8px;
-    background: rgba(255, 193, 7, 0.2);
-    border: 1px solid #FFC107;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: bold;
+    margin-left: 6px;
+    padding: 3px 6px;
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 500;
     color: #FFC107;
-    min-width: 70px;
+    min-width: 60px;
     text-align: center;
     display: none;
+    font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
 }
 
 .selection-duration {
-    margin-left: 8px;
-    padding: 4px 8px;
-    background: rgba(76, 175, 80, 0.2);
-    border: 1px solid #4CAF50;
-    border-radius: 4px;
-    font-size: 11px;
-    font-weight: bold;
+    margin-left: 6px;
+    padding: 3px 6px;
+    background: rgba(76, 175, 80, 0.1);
+    border: 1px solid rgba(76, 175, 80, 0.3);
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 500;
     color: #4CAF50;
-    min-width: 80px;
+    min-width: 60px;
     text-align: center;
     display: none;
+    font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
 }
 
 /* Digital Time Display - Green Theme */
@@ -406,55 +414,34 @@ input[type="file"] {
 /* Old zoom-controls overlay styles removed - now using zoom-controls-strip */
 
 .zoom-btn {
-    width: 28px;
+    width: 24px;
     height: 24px;
-    border: 1px solid transparent;
-    border-radius: 4px;
-    color: white;
-    font-size: 12px;
-    font-weight: bold;
+    border: 1px solid #4CAF50;
+    border-radius: 3px;
+    color: #4CAF50;
+    font-size: 14px;
+    font-weight: 500;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease;
     user-select: none;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    background: linear-gradient(45deg, #4CAF50, #45a049);
-    border-color: #388E3C;
+    background: rgba(76, 175, 80, 0.05);
+    font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
 }
 
 .zoom-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
-    background: linear-gradient(45deg, #45a049, #66BB6A);
-    border-color: #4CAF50;
+    background: rgba(76, 175, 80, 0.15);
+    border-color: #66BB6A;
+    color: #66BB6A;
+    text-shadow: 0 0 3px rgba(76, 175, 80, 0.5);
 }
 
 .zoom-btn:active {
-    transform: translateY(0);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-}
-
-.zoom-btn.zoom-out {
-    background: linear-gradient(45deg, #FF6B6B, #FF5252);
-    border-color: #F44336;
-}
-
-.zoom-btn.zoom-out:hover {
-    background: linear-gradient(45deg, #FF5252, #FF7043);
-    border-color: #FF6B6B;
-}
-
-.zoom-btn.zoom-reset {
-    background: linear-gradient(45deg, #FF9800, #FFB74D);
-    border-color: #F57C00;
-    font-size: 10px;
-}
-
-.zoom-btn.zoom-reset:hover {
-    background: linear-gradient(45deg, #FFB74D, #FFCC02);
-    border-color: #FF9800;
+    background: rgba(76, 175, 80, 0.25);
+    border-color: #4CAF50;
+    transform: scale(0.95);
 }
 
 .waveform-scroll-container {
