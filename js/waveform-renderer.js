@@ -277,51 +277,50 @@ export class WaveformRenderer {
     }
 
     /**
-     * Draws a time label for a specific position
+     * Draws a time indicator triangle in the time bar area
      * @param {number} x - X position on canvas
      * @param {number} time - Time in seconds
-     * @param {string} color - Color for the label
+     * @param {string} color - Color for the triangle
      * @param {string} label - Label type (Progress, Seek, etc.)
      */
     drawTimeLabel(x, time, color, label) {
         const timeText = this.formatTimeLabel(time);
-        const labelText = `${label}: ${timeText}`;
         
-        // Set font and style
-        this.ctx.font = 'bold 11px Arial';
+        // Draw small triangle in the time bar area (top 20px)
+        const triangleSize = 4;
+        const triangleY = 19; // Just below the time scale baseline
+        
+        this.ctx.fillStyle = color;
+        this.ctx.beginPath();
+        this.ctx.moveTo(x, triangleY); // Bottom point (pointing down)
+        this.ctx.lineTo(x - triangleSize, triangleY - triangleSize); // Top left
+        this.ctx.lineTo(x + triangleSize, triangleY - triangleSize); // Top right
+        this.ctx.closePath();
+        this.ctx.fill();
+        
+        // Draw small time text next to triangle
+        this.ctx.font = '9px Arial';
         this.ctx.fillStyle = color;
         
-        // Measure text for background
-        const textWidth = this.ctx.measureText(labelText).width;
-        const padding = 4;
-        const labelHeight = 16;
+        const textWidth = this.ctx.measureText(timeText).width;
+        let textX = x - textWidth/2;
         
-        // Position label in the waveform area (middle of canvas)
-        let labelX = x - textWidth/2;
-        const labelY = this.canvas.height / 2;
-        
-        // Keep label within canvas bounds
-        if (labelX < 5) labelX = 5;
-        if (labelX + textWidth > this.canvas.width - 5) {
-            labelX = this.canvas.width - textWidth - 5;
+        // Keep text within canvas bounds
+        if (textX < 2) textX = 2;
+        if (textX + textWidth > this.canvas.width - 2) {
+            textX = this.canvas.width - textWidth - 2;
         }
         
-        // Draw background
-        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        this.ctx.fillRect(labelX - padding, labelY - labelHeight + 2, textWidth + padding*2, labelHeight);
+        // Draw text with background for better visibility
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        this.ctx.fillRect(textX - 2, 2, textWidth + 4, 10);
         
-        // Draw border
-        this.ctx.strokeStyle = color;
-        this.ctx.lineWidth = 1;
-        this.ctx.strokeRect(labelX - padding, labelY - labelHeight + 2, textWidth + padding*2, labelHeight);
-        
-        // Draw text
         this.ctx.fillStyle = color;
-        this.ctx.fillText(labelText, labelX, labelY - 2);
+        this.ctx.fillText(timeText, textX, 10);
     }
 
     /**
-     * Draws selection time labels
+     * Draws selection time indicators
      * @param {number} startTime - Selection start time
      * @param {number} endTime - Selection end time
      */
@@ -331,51 +330,55 @@ export class WaveformRenderer {
         const startX = this.getPixelPositionForTimeZoomed(startTime);
         const endX = this.getPixelPositionForTimeZoomed(endTime);
         
-        // Draw start time label
+        // Draw start time triangle
         if (startX >= 0 && startX <= this.canvas.width) {
-            this.drawTimeLabel(startX, startTime, '#4CAF50', 'Start');
+            this.drawSelectionTriangle(startX, '#4CAF50', false); // Green triangle pointing up
         }
         
-        // Draw end time label
+        // Draw end time triangle
         if (endX >= 0 && endX <= this.canvas.width) {
-            this.drawTimeLabel(endX, endTime, '#4CAF50', 'End');
+            this.drawSelectionTriangle(endX, '#4CAF50', false); // Green triangle pointing up
         }
         
-        // Draw duration in the middle if both points are visible
+        // Draw compact duration info in corner if both points are visible
         if (startX >= 0 && endX >= 0 && startX <= this.canvas.width && endX <= this.canvas.width) {
-            const midX = (startX + endX) / 2;
             const duration = Math.abs(endTime - startTime);
-            const durationText = `Duration: ${this.formatTimeLabel(duration)}`;
+            const durationText = this.formatTimeLabel(duration);
             
-            this.ctx.font = 'bold 12px Arial';
+            this.ctx.font = 'bold 10px Arial';
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            this.ctx.fillRect(this.canvas.width - 60, 2, 56, 12);
+            
             this.ctx.fillStyle = '#4CAF50';
-            
-            const textWidth = this.ctx.measureText(durationText).width;
-            const padding = 6;
-            const labelHeight = 18;
-            
-            let labelX = midX - textWidth/2;
-            const labelY = 30;
-            
-            // Keep label within canvas bounds
-            if (labelX < 5) labelX = 5;
-            if (labelX + textWidth > this.canvas.width - 5) {
-                labelX = this.canvas.width - textWidth - 5;
-            }
-            
-            // Draw background
-            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-            this.ctx.fillRect(labelX - padding, labelY - labelHeight + 2, textWidth + padding*2, labelHeight);
-            
-            // Draw border
-            this.ctx.strokeStyle = '#4CAF50';
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(labelX - padding, labelY - labelHeight + 2, textWidth + padding*2, labelHeight);
-            
-            // Draw text
-            this.ctx.fillStyle = '#4CAF50';
-            this.ctx.fillText(durationText, labelX, labelY - 2);
+            this.ctx.fillText(durationText, this.canvas.width - 58, 11);
         }
+    }
+
+    /**
+     * Draws a small triangle for selection indicators
+     * @param {number} x - X position
+     * @param {string} color - Triangle color
+     * @param {boolean} pointDown - Whether triangle points down
+     */
+    drawSelectionTriangle(x, color, pointDown = true) {
+        const triangleSize = 3;
+        const y = pointDown ? 22 : 15; // Position in time bar area
+        
+        this.ctx.fillStyle = color;
+        this.ctx.beginPath();
+        
+        if (pointDown) {
+            this.ctx.moveTo(x, y); // Bottom point
+            this.ctx.lineTo(x - triangleSize, y - triangleSize); // Top left
+            this.ctx.lineTo(x + triangleSize, y - triangleSize); // Top right
+        } else {
+            this.ctx.moveTo(x, y); // Bottom point (pointing up)
+            this.ctx.lineTo(x - triangleSize, y + triangleSize); // Top left
+            this.ctx.lineTo(x + triangleSize, y + triangleSize); // Top right
+        }
+        
+        this.ctx.closePath();
+        this.ctx.fill();
     }
 
     /**
