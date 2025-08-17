@@ -51,6 +51,10 @@ export class AudioChunkingEditor {
         this.chunkCount = document.getElementById('chunkCount');
         this.chunkInfo = document.getElementById('chunkInfo');
         this.selectedChunkInfo = document.getElementById('selectedChunkInfo');
+        this.playProgressPosition = document.getElementById('playProgressPosition');
+        this.hoverPosition = document.getElementById('hoverPosition');
+        this.mousePositionTime = document.getElementById('mousePositionTime');
+        this.selectionDuration = document.getElementById('selectionDuration');
         this.progress = document.getElementById('progress');
         this.progressBar = document.getElementById('progressBar');
     }
@@ -208,6 +212,8 @@ export class AudioChunkingEditor {
         this.canvas.removeEventListener('mouseup', this.boundMouseUp);
         this.canvas.removeEventListener('mouseleave', this.boundMouseUp);
         this.canvas.removeEventListener('click', this.boundWaveformClick);
+        this.canvas.removeEventListener('mousemove', this.boundHoverMove);
+        this.canvas.removeEventListener('mouseleave', this.boundHoverLeave);
         
         // Create bound handlers if they don't exist
         if (!this.boundMouseDown) {
@@ -215,6 +221,8 @@ export class AudioChunkingEditor {
             this.boundMouseMove = (e) => this.handleMouseMove(e);
             this.boundMouseUp = () => this.handleMouseUp();
             this.boundWaveformClick = (e) => this.handleWaveformClick(e);
+            this.boundHoverMove = (e) => this.handleHoverMove(e);
+            this.boundHoverLeave = () => this.handleHoverLeave();
         }
         
         // Always add listeners to the canvas directly for better coordinate handling
@@ -223,6 +231,10 @@ export class AudioChunkingEditor {
         this.canvas.addEventListener('mouseup', this.boundMouseUp);
         this.canvas.addEventListener('mouseleave', this.boundMouseUp);
         this.canvas.addEventListener('click', this.boundWaveformClick);
+        
+        // Add hover tracking listeners (separate from drag functionality)
+        this.canvas.addEventListener('mousemove', this.boundHoverMove);
+        this.canvas.addEventListener('mouseleave', this.boundHoverLeave);
     }
 
     handleWaveformClick(event) {
@@ -256,6 +268,7 @@ export class AudioChunkingEditor {
             this.updateChunkInfo();
             this.updateDeleteButton();
             this.updateSelectionInfo();
+            this.updateSelectionDuration();
         }
     }
 
@@ -300,7 +313,12 @@ export class AudioChunkingEditor {
         
         if (this.dragStarted) {
             this.selection.end = currentTime;
+            // Position seek marker and play progress line at the leftmost position of the selection
+            this.seekPosition = Math.min(this.selection.start, this.selection.end);
+            this.audioPlayer.pausedAtTime = this.seekPosition;
             this.updateSelectionDisplay();
+            this.updateSelectionDuration();
+            this.waveformRenderer.drawWaveform(this.audioBuffer, this.seekPosition, this.audioPlayer.getCurrentPlaybackTime(), this.selection);
         } else {
             this.seekPosition = currentTime;
             this.waveformRenderer.drawWaveform(this.audioBuffer, this.seekPosition, this.audioPlayer.getCurrentPlaybackTime(), this.selection);
@@ -317,6 +335,7 @@ export class AudioChunkingEditor {
             this.selection.end = 0;
             this.selectionDiv.style.display = 'none';
             this.updateSelectionInfo();
+            this.updateSelectionDuration();
             this.updateDeleteButton();
         } else {
             this.endSelection();
@@ -331,6 +350,34 @@ export class AudioChunkingEditor {
         }
         
         this.dragStarted = false;
+    }
+
+    handleHoverMove(event) {
+        if (!this.audioBuffer) return;
+        
+        // Get coordinates relative to the canvas
+        const rect = this.canvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const hoverTime = this.waveformRenderer.getTimeFromMousePosition(x);
+        
+        // Only show hover position if it's within audio bounds
+        if (hoverTime >= 0 && hoverTime <= this.audioBuffer.duration) {
+            // Update zoom bar hover position
+            this.hoverPosition.textContent = `🎯 ${AudioUtils.formatTime(hoverTime)}`;
+            this.hoverPosition.style.display = 'block';
+            
+            // Update main digital time display mouse position
+            this.mousePositionTime.textContent = AudioUtils.formatTimeWithMilliseconds(hoverTime);
+        } else {
+            this.hoverPosition.style.display = 'none';
+            // Keep mouse position showing, don't hide it
+        }
+    }
+
+    handleHoverLeave() {
+        // Keep showing the last hover position when mouse leaves
+        // this.hoverPosition.style.display = 'none';
+        // this.mousePositionTime.style.display = 'none';
     }
 
     async seekToTime(time) {
@@ -350,13 +397,15 @@ export class AudioChunkingEditor {
             [this.selection.start, this.selection.end] = [this.selection.end, this.selection.start];
         }
         
-        // Position seek pointer at the beginning of the selected area
+        // Position seek pointer and play progress line at the beginning of the selected area
         this.seekPosition = this.selection.start;
+        this.audioPlayer.pausedAtTime = this.selection.start;
         
         // Allow drag selection to span across any part of the waveform
         
         this.updateSelectionInfo();
         this.updateSelectionDisplay();
+        this.updateSelectionDuration();
         this.updateDeleteButton();
     }
 
@@ -370,6 +419,7 @@ export class AudioChunkingEditor {
                 this.updateChunkInfo();
                 this.updateDeleteButton();
                 this.updateSelectionInfo();
+                this.updateSelectionDuration();
             }
         }
     }
@@ -493,6 +543,7 @@ export class AudioChunkingEditor {
         
         this.updateDeleteButton();
         this.updateSelectionInfo();
+        this.updateSelectionDuration();
     }
 
     deleteAudioRange(startTime, endTime) {
@@ -591,6 +642,7 @@ export class AudioChunkingEditor {
         if (!this.audioPlayer.isPlaying) {
             // Reset play button when audio stops
             this.playBtn.textContent = '▶️ Play';
+            this.playProgressPosition.style.display = 'none';
             return;
         }
         
@@ -678,14 +730,44 @@ export class AudioChunkingEditor {
         this.updateFadeButtons();
     }
 
+    updateSelectionDuration() {
+        const hasRegionSelection = this.selection.start !== this.selection.end;
+        
+        if (!hasRegionSelection) {
+            this.selectionDuration.textContent = '';
+            this.selectionDuration.style.display = 'none';
+            return;
+        }
+        
+        const duration = Math.abs(this.selection.end - this.selection.start);
+        this.selectionDuration.textContent = `📏 ${AudioUtils.formatTime(duration)}`;
+        this.selectionDuration.style.display = 'block';
+    }
+
     updateDuration() {
-        this.durationSpan.textContent = AudioUtils.formatTime(this.audioBuffer.duration);
+        if (this.durationSpan && this.audioBuffer) {
+            this.durationSpan.textContent = AudioUtils.formatTimeWithMilliseconds(this.audioBuffer.duration);
+        }
     }
 
     updateCurrentTime() {
         if (!this.audioBuffer) return;
         const currentTime = this.audioPlayer.getCurrentPlaybackTime();
-        this.currentTimeSpan.textContent = AudioUtils.formatTime(currentTime);
+        if (this.currentTimeSpan) {
+            this.currentTimeSpan.textContent = AudioUtils.formatTimeWithMilliseconds(currentTime);
+        }
+        this.updatePlayProgressPosition(currentTime);
+    }
+
+    updatePlayProgressPosition(currentTime) {
+        if (!this.audioBuffer) return;
+        
+        if (this.audioPlayer.isPlaying) {
+            this.playProgressPosition.textContent = `▶️ ${AudioUtils.formatTime(currentTime)}`;
+            this.playProgressPosition.style.display = 'block';
+        } else {
+            this.playProgressPosition.style.display = 'none';
+        }
     }
 
     updateChunkInfo() {
@@ -790,6 +872,7 @@ export class AudioChunkingEditor {
         this.selection.end = 0;
         this.selectionDiv.style.display = 'none';
         this.updateSelectionInfo();
+        this.updateSelectionDuration();
         this.updateDeleteButton();
         this.updateFadeButtons();
     }

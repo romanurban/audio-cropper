@@ -29,6 +29,9 @@
                     <button class="zoom-btn zoom-in" title="Zoom In">+</button>
                     <button class="zoom-btn zoom-out" title="Zoom Out">−</button>
                     <button class="zoom-btn zoom-reset" title="Reset Zoom">⌂</button>
+                    <div class="play-progress-position" id="playProgressPosition"></div>
+                    <div class="hover-position" id="hoverPosition"></div>
+                    <div class="selection-duration" id="selectionDuration"></div>
                 </div>
             </div>
             
@@ -42,9 +45,15 @@
                 <button class="btn btn-danger" id="deleteBtn" disabled>🗑️ Delete</button>
             </div>
             
+            <div class="time-display-container">
+                <div class="digital-time-display">
+                    <div class="current-time-large" id="currentTime">00:00:000</div>
+                    <div class="total-duration-small" id="duration">00:00:000</div>
+                    <div class="mouse-position-time" id="mousePositionTime">00:00:000</div>
+                </div>
+            </div>
+            
             <div class="info" id="info">
-                <div>Duration: <span id="duration">--:--</span></div>
-                <div>Current Time: <span id="currentTime">--:--</span></div>
                 <div>Selection: <span id="selectionInfo">No selection</span></div>
                 <div>Chunks: <span id="chunkCount">1</span></div>
                 <div class="chunk-info" id="chunkInfo" style="display: none;">

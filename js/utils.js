@@ -15,6 +15,18 @@ export class AudioUtils {
     }
 
     /**
+     * Formats time in seconds to MM:SS:mmm format (with milliseconds)
+     * @param {number} seconds - Time in seconds
+     * @returns {string} Formatted time string with milliseconds
+     */
+    static formatTimeWithMilliseconds(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        const milliseconds = Math.floor((seconds % 1) * 1000);
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}:${milliseconds.toString().padStart(3, '0')}`;
+    }
+
+    /**
      * Converts an AudioBuffer to WAV format
      * @param {AudioBuffer} buffer - The audio buffer to convert
      * @returns {ArrayBuffer} WAV file data
