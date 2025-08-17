@@ -26,23 +26,37 @@
             
             <div class="instructions">
                 <div class="zoom-controls-strip">
-                    <button class="zoom-btn zoom-in" title="Zoom In">+</button>
-                    <button class="zoom-btn zoom-out" title="Zoom Out">−</button>
-                    <button class="zoom-btn zoom-reset" title="Reset Zoom">⌂</button>
-                    
-                    <div class="digital-time-display">
-                        <div class="current-time-large" id="currentTime">00:00:000</div>
-                        <div class="total-duration-small" id="duration">00:00:000</div>
-                        <div class="mouse-position-time" id="mousePositionTime">00:00:000</div>
+                    <div class="left-section">
+                        <button class="zoom-btn zoom-in" title="Zoom In">+</button>
+                        <button class="zoom-btn zoom-out" title="Zoom Out">−</button>
+                        <button class="zoom-btn zoom-reset" title="Reset Zoom">⌂</button>
+                        
+                        <div class="digital-time-display">
+                            <div class="current-time-large" id="currentTime">00:00:000</div>
+                            <div class="total-duration-small" id="duration">00:00:000</div>
+                            <div class="mouse-position-time" id="mousePositionTime">00:00:000</div>
+                        </div>
                     </div>
                     
-                    <div class="selection-digital-display" id="selectionClockContainer" style="display: none;">
-                        <div class="selection-times">
-                            <span class="selection-start" id="selectionStart">00:00:000</span>
-                            <span class="selection-separator">—</span>
-                            <span class="selection-end" id="selectionEnd">00:00:000</span>
+                    <div class="right-section">
+                        <div class="selection-info-block">
+                            <span class="selection-label">Selection:</span>
+                            <div class="selection-details">
+                                <span class="selection-field">
+                                    <label>Start:</label>
+                                    <span id="selectionStartTime">-</span>
+                                </span>
+                                <span class="selection-field">
+                                    <label>End:</label>
+                                    <span id="selectionEndTime">-</span>
+                                </span>
+                                <span class="selection-field">
+                                    <label>Duration:</label>
+                                    <span id="selectionDurationTime">-</span>
+                                </span>
+                                <button class="clear-selection-btn" id="clearSelectionBtn" title="Clear Selection">clear selection</button>
+                            </div>
                         </div>
-                        <div class="selection-duration-display" id="selectionDurationDisplay">00:00:000</div>
                     </div>
                 </div>
             </div>

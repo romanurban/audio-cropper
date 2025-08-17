@@ -55,10 +55,10 @@ export class AudioChunkingEditor {
         this.hoverPosition = null; // Removed from zoom bar
         this.mousePositionTime = document.getElementById('mousePositionTime');
         this.selectionDuration = null; // Removed from zoom bar
-        this.selectionClockContainer = document.getElementById('selectionClockContainer');
-        this.selectionStart = document.getElementById('selectionStart');
-        this.selectionEnd = document.getElementById('selectionEnd');
-        this.selectionDurationDisplay = document.getElementById('selectionDurationDisplay');
+        this.selectionStartTime = document.getElementById('selectionStartTime');
+        this.selectionEndTime = document.getElementById('selectionEndTime');
+        this.selectionDurationTime = document.getElementById('selectionDurationTime');
+        this.clearSelectionBtn = document.getElementById('clearSelectionBtn');
         this.progress = document.getElementById('progress');
         this.progressBar = document.getElementById('progressBar');
     }
@@ -107,6 +107,7 @@ export class AudioChunkingEditor {
         this.fadeInBtn.addEventListener('click', () => this.applyFadeIn());
         this.fadeOutBtn.addEventListener('click', () => this.applyFadeOut());
         this.deleteBtn.addEventListener('click', () => this.delete());
+        this.clearSelectionBtn.addEventListener('click', () => this.clearSelection());
         
         // Resize
         window.addEventListener('resize', () => this.waveformRenderer.resizeCanvas());
@@ -767,7 +768,10 @@ export class AudioChunkingEditor {
         const hasRegionSelection = this.selection.start !== this.selection.end;
         
         if (!hasRegionSelection) {
-            this.selectionClockContainer.style.display = 'none';
+            // Clear selection display
+            this.selectionStartTime.textContent = '-';
+            this.selectionEndTime.textContent = '-';
+            this.selectionDurationTime.textContent = '-';
             return;
         }
         
@@ -775,10 +779,10 @@ export class AudioChunkingEditor {
         const endTime = Math.max(this.selection.start, this.selection.end);
         const duration = endTime - startTime;
         
-        this.selectionStart.textContent = AudioUtils.formatTimeWithMilliseconds(startTime);
-        this.selectionEnd.textContent = AudioUtils.formatTimeWithMilliseconds(endTime);
-        this.selectionDurationDisplay.textContent = AudioUtils.formatTimeWithMilliseconds(duration);
-        this.selectionClockContainer.style.display = 'block';
+        // Update persistent selection info block
+        this.selectionStartTime.textContent = AudioUtils.formatTimeWithMilliseconds(startTime);
+        this.selectionEndTime.textContent = AudioUtils.formatTimeWithMilliseconds(endTime);
+        this.selectionDurationTime.textContent = AudioUtils.formatTimeWithMilliseconds(duration);
     }
 
     updateDuration() {
@@ -919,5 +923,21 @@ export class AudioChunkingEditor {
         const hasSelection = this.selection.start !== this.selection.end;
         this.fadeInBtn.disabled = !hasSelection;
         this.fadeOutBtn.disabled = !hasSelection;
+    }
+
+    clearSelection() {
+        this.selection.start = 0;
+        this.selection.end = 0;
+        this.selectionDiv.style.display = 'none';
+        this.updateSelectionInfo();
+        this.updateSelectionDuration();
+        this.updateSelectionClock();
+        this.updateDeleteButton();
+        this.updateFadeButtons();
+        
+        // Redraw waveform to clear selection
+        if (this.audioBuffer) {
+            this.waveformRenderer.drawWaveform(this.audioBuffer, this.seekPosition, this.audioPlayer.getCurrentPlaybackTime());
+        }
     }
 }

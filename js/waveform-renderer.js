@@ -340,18 +340,7 @@ export class WaveformRenderer {
             this.drawSelectionTriangle(endX, '#4CAF50', false); // Green triangle pointing up
         }
         
-        // Draw compact duration info in corner if both points are visible
-        if (startX >= 0 && endX >= 0 && startX <= this.canvas.width && endX <= this.canvas.width) {
-            const duration = Math.abs(endTime - startTime);
-            const durationText = this.formatTimeLabel(duration);
-            
-            this.ctx.font = 'bold 10px Arial';
-            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-            this.ctx.fillRect(this.canvas.width - 60, 2, 56, 12);
-            
-            this.ctx.fillStyle = '#4CAF50';
-            this.ctx.fillText(durationText, this.canvas.width - 58, 11);
-        }
+        // Duration info removed - now shown in digital clock display
     }
 
     /**
