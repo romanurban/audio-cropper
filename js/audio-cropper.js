@@ -51,10 +51,14 @@ export class AudioChunkingEditor {
         this.chunkCount = document.getElementById('chunkCount');
         this.chunkInfo = document.getElementById('chunkInfo');
         this.selectedChunkInfo = document.getElementById('selectedChunkInfo');
-        this.playProgressPosition = document.getElementById('playProgressPosition');
-        this.hoverPosition = document.getElementById('hoverPosition');
+        this.playProgressPosition = null; // Removed from zoom bar
+        this.hoverPosition = null; // Removed from zoom bar
         this.mousePositionTime = document.getElementById('mousePositionTime');
-        this.selectionDuration = document.getElementById('selectionDuration');
+        this.selectionDuration = null; // Removed from zoom bar
+        this.selectionClockContainer = document.getElementById('selectionClockContainer');
+        this.selectionStart = document.getElementById('selectionStart');
+        this.selectionEnd = document.getElementById('selectionEnd');
+        this.selectionDurationDisplay = document.getElementById('selectionDurationDisplay');
         this.progress = document.getElementById('progress');
         this.progressBar = document.getElementById('progressBar');
     }
@@ -269,6 +273,7 @@ export class AudioChunkingEditor {
             this.updateDeleteButton();
             this.updateSelectionInfo();
             this.updateSelectionDuration();
+            this.updateSelectionClock();
         }
     }
 
@@ -318,6 +323,7 @@ export class AudioChunkingEditor {
             this.audioPlayer.pausedAtTime = this.seekPosition;
             this.updateSelectionDisplay();
             this.updateSelectionDuration();
+            this.updateSelectionClock();
             this.waveformRenderer.drawWaveform(this.audioBuffer, this.seekPosition, this.audioPlayer.getCurrentPlaybackTime(), this.selection);
         } else {
             this.seekPosition = currentTime;
@@ -336,6 +342,7 @@ export class AudioChunkingEditor {
             this.selectionDiv.style.display = 'none';
             this.updateSelectionInfo();
             this.updateSelectionDuration();
+            this.updateSelectionClock();
             this.updateDeleteButton();
         } else {
             this.endSelection();
@@ -362,14 +369,18 @@ export class AudioChunkingEditor {
         
         // Only show hover position if it's within audio bounds
         if (hoverTime >= 0 && hoverTime <= this.audioBuffer.duration) {
-            // Update zoom bar hover position
-            this.hoverPosition.textContent = `🎯 ${AudioUtils.formatTime(hoverTime)}`;
-            this.hoverPosition.style.display = 'block';
+            // Update zoom bar hover position (if element exists)
+            if (this.hoverPosition) {
+                this.hoverPosition.textContent = `🎯 ${AudioUtils.formatTime(hoverTime)}`;
+                this.hoverPosition.style.display = 'block';
+            }
             
             // Update main digital time display mouse position
             this.mousePositionTime.textContent = AudioUtils.formatTimeWithMilliseconds(hoverTime);
         } else {
-            this.hoverPosition.style.display = 'none';
+            if (this.hoverPosition) {
+                this.hoverPosition.style.display = 'none';
+            }
             // Keep mouse position showing, don't hide it
         }
     }
@@ -406,6 +417,7 @@ export class AudioChunkingEditor {
         this.updateSelectionInfo();
         this.updateSelectionDisplay();
         this.updateSelectionDuration();
+        this.updateSelectionClock();
         this.updateDeleteButton();
     }
 
@@ -420,6 +432,7 @@ export class AudioChunkingEditor {
                 this.updateDeleteButton();
                 this.updateSelectionInfo();
                 this.updateSelectionDuration();
+                this.updateSelectionClock();
             }
         }
     }
@@ -544,6 +557,7 @@ export class AudioChunkingEditor {
         this.updateDeleteButton();
         this.updateSelectionInfo();
         this.updateSelectionDuration();
+        this.updateSelectionClock();
     }
 
     deleteAudioRange(startTime, endTime) {
@@ -642,7 +656,9 @@ export class AudioChunkingEditor {
         if (!this.audioPlayer.isPlaying) {
             // Reset play button when audio stops
             this.playBtn.textContent = '▶️ Play';
-            this.playProgressPosition.style.display = 'none';
+            if (this.playProgressPosition) {
+                this.playProgressPosition.style.display = 'none';
+            }
             return;
         }
         
@@ -731,6 +747,9 @@ export class AudioChunkingEditor {
     }
 
     updateSelectionDuration() {
+        // This method is kept for compatibility but the zoom bar element was removed
+        if (!this.selectionDuration) return;
+        
         const hasRegionSelection = this.selection.start !== this.selection.end;
         
         if (!hasRegionSelection) {
@@ -742,6 +761,24 @@ export class AudioChunkingEditor {
         const duration = Math.abs(this.selection.end - this.selection.start);
         this.selectionDuration.textContent = `📏 ${AudioUtils.formatTime(duration)}`;
         this.selectionDuration.style.display = 'block';
+    }
+
+    updateSelectionClock() {
+        const hasRegionSelection = this.selection.start !== this.selection.end;
+        
+        if (!hasRegionSelection) {
+            this.selectionClockContainer.style.display = 'none';
+            return;
+        }
+        
+        const startTime = Math.min(this.selection.start, this.selection.end);
+        const endTime = Math.max(this.selection.start, this.selection.end);
+        const duration = endTime - startTime;
+        
+        this.selectionStart.textContent = AudioUtils.formatTimeWithMilliseconds(startTime);
+        this.selectionEnd.textContent = AudioUtils.formatTimeWithMilliseconds(endTime);
+        this.selectionDurationDisplay.textContent = AudioUtils.formatTimeWithMilliseconds(duration);
+        this.selectionClockContainer.style.display = 'block';
     }
 
     updateDuration() {
@@ -760,7 +797,7 @@ export class AudioChunkingEditor {
     }
 
     updatePlayProgressPosition(currentTime) {
-        if (!this.audioBuffer) return;
+        if (!this.audioBuffer || !this.playProgressPosition) return;
         
         if (this.audioPlayer.isPlaying) {
             this.playProgressPosition.textContent = `▶️ ${AudioUtils.formatTime(currentTime)}`;
@@ -873,6 +910,7 @@ export class AudioChunkingEditor {
         this.selectionDiv.style.display = 'none';
         this.updateSelectionInfo();
         this.updateSelectionDuration();
+        this.updateSelectionClock();
         this.updateDeleteButton();
         this.updateFadeButtons();
     }
