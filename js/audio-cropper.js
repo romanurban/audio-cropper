@@ -350,6 +350,9 @@ export class AudioChunkingEditor {
             [this.selection.start, this.selection.end] = [this.selection.end, this.selection.start];
         }
         
+        // Position seek pointer at the beginning of the selected area
+        this.seekPosition = this.selection.start;
+        
         // Allow drag selection to span across any part of the waveform
         
         this.updateSelectionInfo();
