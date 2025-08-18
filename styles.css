@@ -158,6 +158,47 @@ input[type="file"] {
     pointer-events: none;
 }
 
+.selection.resizable {
+    pointer-events: auto;
+}
+
+.selection-resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: rgba(76, 175, 80, 0.8);
+    cursor: ew-resize;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 10;
+}
+
+.selection-resize-handle:hover {
+    background: rgba(76, 175, 80, 1);
+    width: 6px;
+}
+
+.selection-resize-handle.left {
+    left: -2px;
+}
+
+.selection-resize-handle.left:hover {
+    left: -3px;
+}
+
+.selection-resize-handle.right {
+    right: -2px;
+}
+
+.selection-resize-handle.right:hover {
+    right: -3px;
+}
+
+.selection.show-handles .selection-resize-handle {
+    opacity: 1;
+}
+
 .chunk-overlay {
     position: absolute;
     top: 0;

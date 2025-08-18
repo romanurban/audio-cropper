@@ -21,6 +21,13 @@ export class AudioChunkingEditor {
         this.dragStarted = false;
         this.justFinishedDrag = false;
         this.initialClickTime = 0;
+        
+        // Resize state
+        this.isResizing = false;
+        this.resizeHandle = null; // 'left' or 'right'
+        this.resizeHandlesVisible = false;
+        this.resizeHandleTimeout = null;
+        this.minSelectionWidth = 0.1; // minimum selection width in seconds
 
         this.initializeElements();
         this.initializeComponents();
@@ -34,6 +41,8 @@ export class AudioChunkingEditor {
         this.waveform = document.getElementById('waveform');
         this.canvas = document.getElementById('waveformCanvas');
         this.selectionDiv = document.getElementById('selection');
+        this.leftHandle = document.getElementById('leftHandle');
+        this.rightHandle = document.getElementById('rightHandle');
         
         // Controls
         this.playBtn = document.getElementById('playBtn');
@@ -99,6 +108,10 @@ export class AudioChunkingEditor {
         this.waveform.addEventListener('mouseleave', () => this.handleMouseUp());
         this.waveform.addEventListener('click', (e) => this.handleWaveformClick(e));
         
+        // Resize handles
+        this.leftHandle.addEventListener('mousedown', (e) => this.handleResizeStart(e, 'left'));
+        this.rightHandle.addEventListener('mousedown', (e) => this.handleResizeStart(e, 'right'));
+        
         // Controls
         this.playBtn.addEventListener('click', () => this.togglePlayPause());
         this.stopBtn.addEventListener('click', () => this.stop());
@@ -114,6 +127,10 @@ export class AudioChunkingEditor {
         
         // Click outside canvas to deselect chunks
         document.addEventListener('click', (e) => this.handleDocumentClick(e));
+        
+        // Global resize event listeners
+        document.addEventListener('mousemove', (e) => this.handleResizeMove(e));
+        document.addEventListener('mouseup', () => this.handleResizeEnd());
     }
 
     async initializeAudioContext() {
@@ -257,16 +274,34 @@ export class AudioChunkingEditor {
         const x = event.clientX - rect.left;
         const clickTime = this.waveformRenderer.getTimeFromMousePosition(x);
         
+        // Check if click is within existing selection
+        const hasSelection = this.selection.start !== this.selection.end;
+        const selectionStart = Math.min(this.selection.start, this.selection.end);
+        const selectionEnd = Math.max(this.selection.start, this.selection.end);
+        const clickInSelection = hasSelection && clickTime >= selectionStart && clickTime <= selectionEnd;
+        
+        // Don't clear selection if clicking within it
+        if (clickInSelection) {
+            return;
+        }
+        
         // Find which chunk was clicked based on time
         const selectedChunk = this.chunkManager.chunks.find(chunk => 
             clickTime >= chunk.start && clickTime <= chunk.end
         );
         
         if (selectedChunk) {
-            // Clear drag selection when selecting a chunk
+            // Clear drag selection when selecting a chunk (only if not clicking in selection)
             this.selection.start = 0;
             this.selection.end = 0;
             this.selectionDiv.style.display = 'none';
+            
+            // Hide resize handles and clear timeout
+            this.hideResizeHandles();
+            if (this.resizeHandleTimeout) {
+                clearTimeout(this.resizeHandleTimeout);
+                this.resizeHandleTimeout = null;
+            }
             
             this.chunkManager.selectedChunk = selectedChunk;
             this.chunkManager.updateChunkOverlays();
@@ -279,18 +314,38 @@ export class AudioChunkingEditor {
     }
 
     handleMouseDown(event) {
-        this.isDragging = true;
-        this.dragStarted = false;
+        // Don't start dragging if we're resizing
+        if (this.isResizing) return;
         
         // Get coordinates relative to the canvas
         const rect = this.canvas.getBoundingClientRect();
         const x = event.clientX - rect.left;
-        
         const clickTime = this.waveformRenderer.getTimeFromMousePosition(x);
+        
+        // Check if click is within existing selection
+        const hasSelection = this.selection.start !== this.selection.end;
+        const selectionStart = Math.min(this.selection.start, this.selection.end);
+        const selectionEnd = Math.max(this.selection.start, this.selection.end);
+        const clickInSelection = hasSelection && clickTime >= selectionStart && clickTime <= selectionEnd;
+        
+        // If clicking within selection and handles are visible, don't start new drag
+        if (clickInSelection && this.resizeHandlesVisible) {
+            return;
+        }
+        
+        this.isDragging = true;
+        this.dragStarted = false;
         
         this.selection.start = clickTime;
         this.selection.end = clickTime;
         this.seekPosition = clickTime;
+        
+        // Hide existing resize handles when starting new selection
+        this.hideResizeHandles();
+        if (this.resizeHandleTimeout) {
+            clearTimeout(this.resizeHandleTimeout);
+            this.resizeHandleTimeout = null;
+        }
         
         // Enable split button only if we have a valid seek position in a chunk
         const seekChunk = this.chunkManager.chunks.find(chunk => 
@@ -302,7 +357,7 @@ export class AudioChunkingEditor {
     }
 
     handleMouseMove(event) {
-        if (!this.isDragging) return;
+        if (!this.isDragging || this.isResizing) return;
         
         // Get coordinates relative to the canvas
         const rect = this.canvas.getBoundingClientRect();
@@ -333,7 +388,7 @@ export class AudioChunkingEditor {
     }
 
     handleMouseUp() {
-        if (!this.isDragging) return;
+        if (!this.isDragging || this.isResizing) return;
         
         if (!this.dragStarted) {
             this.seekToTime(this.initialClickTime);
@@ -341,6 +396,14 @@ export class AudioChunkingEditor {
             this.selection.start = 0;
             this.selection.end = 0;
             this.selectionDiv.style.display = 'none';
+            
+            // Hide resize handles and clear timeout
+            this.hideResizeHandles();
+            if (this.resizeHandleTimeout) {
+                clearTimeout(this.resizeHandleTimeout);
+                this.resizeHandleTimeout = null;
+            }
+            
             this.updateSelectionInfo();
             this.updateSelectionDuration();
             this.updateSelectionClock();
@@ -358,6 +421,98 @@ export class AudioChunkingEditor {
         }
         
         this.dragStarted = false;
+    }
+
+    handleResizeStart(event, handle) {
+        event.preventDefault();
+        event.stopPropagation();
+        
+        this.isResizing = true;
+        this.resizeHandle = handle;
+        
+        // Add visual feedback
+        document.body.style.cursor = 'ew-resize';
+        this.selectionDiv.style.userSelect = 'none';
+        
+        console.log(`Started resizing ${handle} handle`);
+    }
+
+    handleResizeMove(event) {
+        if (!this.isResizing || !this.audioBuffer) return;
+        
+        // Get coordinates relative to the canvas
+        const rect = this.canvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const currentTime = this.waveformRenderer.getTimeFromMousePosition(x);
+        
+        // Clamp to audio bounds
+        const clampedTime = Math.max(0, Math.min(currentTime, this.audioBuffer.duration));
+        
+        if (this.resizeHandle === 'left') {
+            // Resize from left edge - update start time
+            const maxStart = this.selection.end - this.minSelectionWidth;
+            this.selection.start = Math.min(clampedTime, maxStart);
+        } else if (this.resizeHandle === 'right') {
+            // Resize from right edge - update end time
+            const minEnd = this.selection.start + this.minSelectionWidth;
+            this.selection.end = Math.max(clampedTime, minEnd);
+        }
+        
+        // Update visual display
+        this.updateSelectionDisplay();
+        this.updateSelectionDuration();
+        this.updateSelectionClock();
+        this.waveformRenderer.drawWaveform(this.audioBuffer, this.seekPosition, this.audioPlayer.getCurrentPlaybackTime(), this.selection);
+    }
+
+    handleResizeEnd() {
+        if (!this.isResizing) return;
+        
+        this.isResizing = false;
+        this.resizeHandle = null;
+        
+        // Remove visual feedback
+        document.body.style.cursor = '';
+        this.selectionDiv.style.userSelect = '';
+        
+        // Update seek position to start of selection
+        this.seekPosition = Math.min(this.selection.start, this.selection.end);
+        this.audioPlayer.pausedAtTime = this.seekPosition;
+        
+        console.log('Finished resizing selection');
+    }
+
+    showResizeHandles() {
+        if (this.selection.start === this.selection.end) return;
+        
+        const selectionWidth = Math.abs(this.selection.end - this.selection.start);
+        if (selectionWidth < this.minSelectionWidth) return;
+        
+        this.selectionDiv.classList.add('resizable', 'show-handles');
+        this.resizeHandlesVisible = true;
+        console.log('Resize handles shown');
+    }
+
+    hideResizeHandles() {
+        this.selectionDiv.classList.remove('resizable', 'show-handles');
+        this.resizeHandlesVisible = false;
+        console.log('Resize handles hidden');
+    }
+
+    scheduleResizeHandles() {
+        // Clear any existing timeout
+        if (this.resizeHandleTimeout) {
+            clearTimeout(this.resizeHandleTimeout);
+        }
+        
+        // Check if selection is wide enough for resize handles
+        const selectionWidth = Math.abs(this.selection.end - this.selection.start);
+        if (selectionWidth >= this.minSelectionWidth) {
+            // Schedule resize handles to appear after 800ms delay
+            this.resizeHandleTimeout = setTimeout(() => {
+                this.showResizeHandles();
+            }, 800);
+        }
     }
 
     handleHoverMove(event) {
@@ -420,6 +575,9 @@ export class AudioChunkingEditor {
         this.updateSelectionDuration();
         this.updateSelectionClock();
         this.updateDeleteButton();
+        
+        // Schedule resize handles to appear with delay
+        this.scheduleResizeHandles();
     }
 
     handleDocumentClick(event) {
@@ -543,6 +701,13 @@ export class AudioChunkingEditor {
             this.selection.start = 0;
             this.selection.end = 0;
             this.selectionDiv.style.display = 'none';
+            
+            // Hide resize handles and clear timeout
+            this.hideResizeHandles();
+            if (this.resizeHandleTimeout) {
+                clearTimeout(this.resizeHandleTimeout);
+                this.resizeHandleTimeout = null;
+            }
             
         } else if (this.chunkManager.selectedChunk) {
             // Delete selected chunk
@@ -912,6 +1077,14 @@ export class AudioChunkingEditor {
         this.selection.start = 0;
         this.selection.end = 0;
         this.selectionDiv.style.display = 'none';
+        
+        // Hide resize handles and clear timeout
+        this.hideResizeHandles();
+        if (this.resizeHandleTimeout) {
+            clearTimeout(this.resizeHandleTimeout);
+            this.resizeHandleTimeout = null;
+        }
+        
         this.updateSelectionInfo();
         this.updateSelectionDuration();
         this.updateSelectionClock();
@@ -929,6 +1102,14 @@ export class AudioChunkingEditor {
         this.selection.start = 0;
         this.selection.end = 0;
         this.selectionDiv.style.display = 'none';
+        
+        // Hide resize handles and clear timeout
+        this.hideResizeHandles();
+        if (this.resizeHandleTimeout) {
+            clearTimeout(this.resizeHandleTimeout);
+            this.resizeHandleTimeout = null;
+        }
+        
         this.updateSelectionInfo();
         this.updateSelectionDuration();
         this.updateSelectionClock();
