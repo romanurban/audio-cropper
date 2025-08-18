@@ -257,60 +257,7 @@ input[type="file"] {
     opacity: 1;
 }
 
-.controls {
-    display: flex;
-    gap: 10px;
-    margin-top: 25px;
-    flex-wrap: wrap;
-    clear: both;
-}
 
-.btn {
-    width: 40px;
-    height: 40px;
-    padding: 0;
-    border: 1px solid #4CAF50;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 20px;
-    font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    background: linear-gradient(135deg, rgba(26, 26, 26, 0.8), rgba(13, 13, 13, 0.8));
-    color: #4CAF50;
-    box-shadow: 
-        0 0 6px rgba(76, 175, 80, 0.2),
-        inset 0 1px 2px rgba(76, 175, 80, 0.1);
-    text-shadow: 0 0 3px rgba(76, 175, 80, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-    box-shadow: none;
-    text-shadow: none;
-}
-
-.btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, rgba(76, 175, 80, 0.1), rgba(69, 160, 73, 0.05));
-    border-color: #66BB6A;
-    color: #66BB6A;
-    box-shadow: 
-        0 0 10px rgba(76, 175, 80, 0.4),
-        inset 0 1px 2px rgba(76, 175, 80, 0.2);
-    text-shadow: 0 0 5px rgba(76, 175, 80, 0.8);
-}
-
-.btn:active:not(:disabled) {
-    background: linear-gradient(135deg, rgba(76, 175, 80, 0.2), rgba(69, 160, 73, 0.1));
-    transform: scale(0.98);
-    box-shadow: 
-        0 0 6px rgba(76, 175, 80, 0.3),
-        inset 0 1px 2px rgba(76, 175, 80, 0.3);
-}
 
 
 .progress {
@@ -364,11 +311,65 @@ input[type="file"] {
     flex-shrink: 0;
 }
 
+
 .zoom-controls-strip .right-section {
     display: flex;
     gap: 10px;
     align-items: center;
     flex-shrink: 0;
+}
+
+.control-buttons {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.control-buttons .btn {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid #4CAF50;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 20px;
+    font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    background: linear-gradient(135deg, rgba(26, 26, 26, 0.8), rgba(13, 13, 13, 0.8));
+    color: #4CAF50;
+    box-shadow: 
+        0 0 6px rgba(76, 175, 80, 0.2),
+        inset 0 1px 2px rgba(76, 175, 80, 0.1);
+    text-shadow: 0 0 3px rgba(76, 175, 80, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.control-buttons .btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    box-shadow: none;
+    text-shadow: none;
+}
+
+.control-buttons .btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(76, 175, 80, 0.1), rgba(69, 160, 73, 0.05));
+    border-color: #66BB6A;
+    color: #66BB6A;
+    box-shadow: 
+        0 0 10px rgba(76, 175, 80, 0.4),
+        inset 0 1px 2px rgba(76, 175, 80, 0.2);
+    text-shadow: 0 0 5px rgba(76, 175, 80, 0.8);
+}
+
+.control-buttons .btn:active:not(:disabled) {
+    background: linear-gradient(135deg, rgba(76, 175, 80, 0.2), rgba(69, 160, 73, 0.1));
+    transform: scale(0.98);
+    box-shadow: 
+        0 0 6px rgba(76, 175, 80, 0.3),
+        inset 0 1px 2px rgba(76, 175, 80, 0.3);
 }
 
 .play-progress-position {
