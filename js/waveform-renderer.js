@@ -1115,15 +1115,17 @@ export class WaveformRenderer {
      */
     getTimeFromMousePosition(mouseX) {
         if (!this.audioBuffer) return 0;
-        
-        // If not zoomed, use regular conversion
+
+        // Not zoomed: simple chunk-based mapping
         if (this.zoomLevel <= 1.0) {
             return this.getTimeFromPixelPosition(mouseX);
         }
-        
-        // When zoomed, mouseX is relative to the canvas (its rect already includes scroll)
+
+        // Zoomed: need ABSOLUTE canvas X, i.e. visibleX + scrollLeft
+        const scrollLeft = this.scrollContainer ? this.scrollContainer.scrollLeft : 0;
         const totalWidth = this.canvas.width;
-        const clampedX = Math.max(0, Math.min(totalWidth, mouseX));
+        const absoluteX = mouseX + scrollLeft;
+        const clampedX = Math.max(0, Math.min(totalWidth, absoluteX));
         const timeRatio = clampedX / totalWidth;
         return timeRatio * this.audioBuffer.duration;
     }
