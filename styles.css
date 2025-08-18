@@ -671,6 +671,16 @@ input[type="file"] {
         inset 0 1px 2px rgba(76, 175, 80, 0.3);
 }
 
+.zoom-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    background: linear-gradient(135deg, rgba(26, 26, 26, 0.4), rgba(13, 13, 13, 0.4));
+    border-color: #444;
+    color: #666;
+    box-shadow: none;
+    text-shadow: none;
+}
+
 .waveform-scroll-container {
     position: relative;
     width: 100%;
