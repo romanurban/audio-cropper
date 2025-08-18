@@ -23,6 +23,9 @@ export class WaveformRenderer {
         
         // Zoom controls
         this.zoomControls = null;
+        this.zoomInBtn = null;
+        this.zoomOutBtn = null;
+        this.zoomResetBtn = null;
         this.isCanvasActive = false;
         
         this.setupEventListeners();
@@ -68,6 +71,7 @@ export class WaveformRenderer {
         // Use another requestAnimationFrame to ensure canvas is properly sized
         requestAnimationFrame(() => {
             this.updateScrollWidth();
+            this.updateZoomButtonStates();
             this.drawWaveform(this.audioBuffer);
         });
     }
@@ -774,49 +778,68 @@ export class WaveformRenderer {
     setupZoomButtonListeners() {
         if (!this.zoomControls) return;
         
-        // Add event listeners to each button individually
-        const zoomInBtn = this.zoomControls.querySelector('.zoom-in');
-        const zoomOutBtn = this.zoomControls.querySelector('.zoom-out');
-        const zoomResetBtn = this.zoomControls.querySelector('.zoom-reset');
+        // Store references to zoom buttons
+        this.zoomInBtn = this.zoomControls.querySelector('.zoom-in');
+        this.zoomOutBtn = this.zoomControls.querySelector('.zoom-out');
+        this.zoomResetBtn = this.zoomControls.querySelector('.zoom-reset');
         
-        if (zoomInBtn) {
-            zoomInBtn.addEventListener('click', (e) => {
+        if (this.zoomInBtn) {
+            this.zoomInBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 this.zoomIn();
             });
             
-            zoomInBtn.addEventListener('mousedown', (e) => {
+            this.zoomInBtn.addEventListener('mousedown', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
             });
         }
         
-        if (zoomOutBtn) {
-            zoomOutBtn.addEventListener('click', (e) => {
+        if (this.zoomOutBtn) {
+            this.zoomOutBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 this.zoomOut();
             });
             
-            zoomOutBtn.addEventListener('mousedown', (e) => {
+            this.zoomOutBtn.addEventListener('mousedown', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
             });
         }
         
-        if (zoomResetBtn) {
-            zoomResetBtn.addEventListener('click', (e) => {
+        if (this.zoomResetBtn) {
+            this.zoomResetBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 this.resetZoom();
             });
             
-            zoomResetBtn.addEventListener('mousedown', (e) => {
+            this.zoomResetBtn.addEventListener('mousedown', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
             });
         }
+        
+        // Update button states initially
+        this.updateZoomButtonStates();
+    }
+
+    /**
+     * Updates the enabled/disabled state of zoom buttons based on current zoom level
+     */
+    updateZoomButtonStates() {
+        if (!this.zoomInBtn || !this.zoomOutBtn || !this.zoomResetBtn) return;
+        
+        // Zoom in button: disabled when at max zoom
+        this.zoomInBtn.disabled = (this.zoomLevel >= this.maxZoom);
+        
+        // Zoom out button: disabled when at normal zoom (1.0) or below
+        this.zoomOutBtn.disabled = (this.zoomLevel <= 1.0);
+        
+        // Reset button: disabled when at normal zoom (1.0)
+        this.zoomResetBtn.disabled = (this.zoomLevel === 1.0);
     }
 
     /**
@@ -857,6 +880,9 @@ export class WaveformRenderer {
         this.updateScrollWidth();
         this.updateScrollPosition();
         
+        // Update button states
+        this.updateZoomButtonStates();
+        
         // Redraw waveform
         if (this.audioBuffer) {
             this.drawWaveform(this.audioBuffer);
@@ -887,6 +913,9 @@ export class WaveformRenderer {
         // Update scroll width and position
         this.updateScrollWidth();
         this.updateScrollPosition();
+        
+        // Update button states
+        this.updateZoomButtonStates();
         
         if (this.audioBuffer) {
             this.drawWaveform(this.audioBuffer);

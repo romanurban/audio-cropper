@@ -568,6 +568,14 @@ input[type="file"] {
 
 /* Old zoom-controls overlay styles removed - now using zoom-controls-strip */
 
+.zoom-buttons-vertical {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
 .zoom-btn {
     width: 20px;
     height: 20px;
