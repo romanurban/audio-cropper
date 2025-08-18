@@ -166,6 +166,21 @@ export class AudioChunkingEditor {
         }
     }
     
+    async loadSampleFile() {
+        try {
+            const response = await fetch('samples/stereo-test.mp3');
+            if (!response.ok) {
+                throw new Error('Sample file not found');
+            }
+            const arrayBuffer = await response.arrayBuffer();
+            const file = new File([arrayBuffer], 'stereo-test.mp3', { type: 'audio/mpeg' });
+            this.handleFile(file);
+        } catch (error) {
+            console.error('Error loading sample file:', error);
+            alert('Error loading sample file. Please try uploading your own audio file.');
+        }
+    }
+
     async handleFile(file) {
         if (!file.type.startsWith('audio/')) {
             alert('Please select an audio file');

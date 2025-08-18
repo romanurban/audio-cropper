@@ -95,6 +95,27 @@ input[type="file"] {
     background: #45a049;
 }
 
+.sample-link {
+    margin: 10px 0 0 0;
+    font-size: 14px;
+    color: #aaa;
+}
+
+.sample-link .click-to-browse {
+    color: #4CAF50;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.sample-link .click-to-browse:hover {
+    color: #66BB6A;
+    text-decoration-color: #66BB6A;
+}
+
+.upload-area.compact .sample-link {
+    display: none;
+}
+
 .waveform-container {
     margin: 20px 0;
     background: #333;
