@@ -988,18 +988,29 @@ export class AudioChunkingEditor {
 
     updateSelectionClock() {
         const hasRegionSelection = this.selection.start !== this.selection.end;
+        const hasChunkSelected = this.chunkManager.selectedChunk !== null;
         
-        if (!hasRegionSelection) {
-            // Clear selection display
+        if (!hasRegionSelection && !hasChunkSelected) {
+            // Clear selection display when nothing is selected
             this.selectionStartTime.textContent = '-';
             this.selectionEndTime.textContent = '-';
             this.selectionDurationTime.textContent = '-';
             return;
         }
         
-        const startTime = Math.min(this.selection.start, this.selection.end);
-        const endTime = Math.max(this.selection.start, this.selection.end);
-        const duration = endTime - startTime;
+        let startTime, endTime, duration;
+        
+        if (hasRegionSelection) {
+            // Show region selection times (drag selection takes priority)
+            startTime = Math.min(this.selection.start, this.selection.end);
+            endTime = Math.max(this.selection.start, this.selection.end);
+            duration = endTime - startTime;
+        } else if (hasChunkSelected) {
+            // Show selected chunk times
+            startTime = this.chunkManager.selectedChunk.start;
+            endTime = this.chunkManager.selectedChunk.end;
+            duration = endTime - startTime;
+        }
         
         // Update persistent selection info block
         this.selectionStartTime.textContent = AudioUtils.formatTimeWithMilliseconds(startTime);
