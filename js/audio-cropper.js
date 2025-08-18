@@ -51,6 +51,7 @@ export class AudioChunkingEditor {
         this.cropBtn = document.getElementById('cropBtn');
         this.fadeInBtn = document.getElementById('fadeInBtn');
         this.fadeOutBtn = document.getElementById('fadeOutBtn');
+        this.silenceBtn = document.getElementById('silenceBtn');
         this.deleteBtn = document.getElementById('deleteBtn');
         
         // Info displays
@@ -120,6 +121,7 @@ export class AudioChunkingEditor {
         this.cropBtn.addEventListener('click', () => this.cropAudio());
         this.fadeInBtn.addEventListener('click', () => this.applyFadeIn());
         this.fadeOutBtn.addEventListener('click', () => this.applyFadeOut());
+        this.silenceBtn.addEventListener('click', () => this.applySilence());
         this.deleteBtn.addEventListener('click', () => this.delete());
         this.clearSelectionBtn.addEventListener('click', () => this.clearSelection());
         
@@ -957,6 +959,7 @@ export class AudioChunkingEditor {
             // this.selectionInfo.textContent = 'No selection';
             this.cropBtn.disabled = !hasChunkSelection;
             this.updateFadeButtons();
+            this.updateSilenceButton();
             return;
         }
         
@@ -967,6 +970,7 @@ export class AudioChunkingEditor {
         // this.selectionInfo.textContent = `${start} - ${end} (${duration})`;
         this.cropBtn.disabled = false;
         this.updateFadeButtons();
+        this.updateSilenceButton();
     }
 
     updateSelectionDuration() {
@@ -1071,6 +1075,7 @@ export class AudioChunkingEditor {
         this.splitBtn.disabled = false;
         this.updateSelectionInfo();
         this.updateFadeButtons();
+        this.updateSilenceButton();
     }
 
     applyFadeIn() {
@@ -1113,6 +1118,83 @@ export class AudioChunkingEditor {
         }
 
         this.applyFadeEffect(startTime, endTime, 'out');
+    }
+
+    applySilence() {
+        let startTime, endTime;
+        
+        // Determine what to apply silence to: region selection or selected chunk
+        const hasRegionSelection = this.selection.start !== this.selection.end;
+        const hasChunkSelection = this.chunkManager.selectedChunk !== null;
+        
+        if (hasRegionSelection) {
+            startTime = Math.min(this.selection.start, this.selection.end);
+            endTime = Math.max(this.selection.start, this.selection.end);
+        } else if (hasChunkSelection) {
+            startTime = this.chunkManager.selectedChunk.start;
+            endTime = this.chunkManager.selectedChunk.end;
+        } else {
+            alert('Please select a region or chunk to apply silence effect');
+            return;
+        }
+
+        this.applySilenceEffect(startTime, endTime);
+    }
+
+    applySilenceEffect(startTime, endTime) {
+        if (!this.audioBuffer) return;
+
+        const sampleRate = this.audioBuffer.sampleRate;
+        const channels = this.audioBuffer.numberOfChannels;
+        const startSample = Math.floor(startTime * sampleRate);
+        const endSample = Math.floor(endTime * sampleRate);
+
+        // Create new buffer with same properties
+        const newBuffer = this.audioContext.createBuffer(channels, this.audioBuffer.length, sampleRate);
+
+        // Copy all audio data first
+        for (let channel = 0; channel < channels; channel++) {
+            const oldData = this.audioBuffer.getChannelData(channel);
+            const newData = newBuffer.getChannelData(channel);
+            
+            // Copy all samples
+            for (let i = 0; i < oldData.length; i++) {
+                newData[i] = oldData[i];
+            }
+
+            // Apply silence to the selected region (set to zero)
+            for (let i = startSample; i < endSample; i++) {
+                newData[i] = 0;
+            }
+        }
+
+        this.audioBuffer = newBuffer;
+        this.waveformRenderer.generateWaveform(this.audioBuffer);
+        
+        // Clear selection after applying silence
+        this.selection.start = 0;
+        this.selection.end = 0;
+        this.selectionDiv.style.display = 'none';
+        
+        // Clear chunk selection after applying silence
+        this.chunkManager.selectedChunk = null;
+        this.chunkManager.updateChunkOverlays();
+        
+        // Hide resize handles and clear timeout
+        this.hideResizeHandles();
+        if (this.resizeHandleTimeout) {
+            clearTimeout(this.resizeHandleTimeout);
+            this.resizeHandleTimeout = null;
+        }
+        
+        this.updateSelectionInfo();
+        this.updateSelectionDuration();
+        this.updateSelectionClock();
+        this.updateDeleteButton();
+        this.updateFadeButtons();
+        this.updateSilenceButton();
+        this.updateSilenceButton();
+        this.updateChunkInfo();
     }
 
     applyFadeEffect(startTime, endTime, type) {
@@ -1181,6 +1263,8 @@ export class AudioChunkingEditor {
         this.updateSelectionClock();
         this.updateDeleteButton();
         this.updateFadeButtons();
+        this.updateSilenceButton();
+        this.updateSilenceButton();
         this.updateChunkInfo();
     }
 
@@ -1189,6 +1273,12 @@ export class AudioChunkingEditor {
         const hasChunkSelected = this.chunkManager.selectedChunk !== null;
         this.fadeInBtn.disabled = !(hasSelection || hasChunkSelected);
         this.fadeOutBtn.disabled = !(hasSelection || hasChunkSelected);
+    }
+
+    updateSilenceButton() {
+        const hasSelection = this.selection.start !== this.selection.end;
+        const hasChunkSelected = this.chunkManager.selectedChunk !== null;
+        this.silenceBtn.disabled = !(hasSelection || hasChunkSelected);
     }
 
     clearSelection() {
@@ -1208,6 +1298,7 @@ export class AudioChunkingEditor {
         this.updateSelectionClock();
         this.updateDeleteButton();
         this.updateFadeButtons();
+        this.updateSilenceButton();
         
         // Redraw waveform to clear selection
         if (this.audioBuffer) {
