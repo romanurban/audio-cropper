@@ -1042,25 +1042,43 @@ export class AudioChunkingEditor {
     }
 
     applyFadeIn() {
-        if (this.selection.start === this.selection.end) {
-            alert('Please select a region to apply fade in effect');
+        let startTime, endTime;
+        
+        // Determine what to apply fade to: region selection or selected chunk
+        const hasRegionSelection = this.selection.start !== this.selection.end;
+        const hasChunkSelection = this.chunkManager.selectedChunk !== null;
+        
+        if (hasRegionSelection) {
+            startTime = Math.min(this.selection.start, this.selection.end);
+            endTime = Math.max(this.selection.start, this.selection.end);
+        } else if (hasChunkSelection) {
+            startTime = this.chunkManager.selectedChunk.start;
+            endTime = this.chunkManager.selectedChunk.end;
+        } else {
+            alert('Please select a region or chunk to apply fade in effect');
             return;
         }
-
-        const startTime = Math.min(this.selection.start, this.selection.end);
-        const endTime = Math.max(this.selection.start, this.selection.end);
 
         this.applyFadeEffect(startTime, endTime, 'in');
     }
 
     applyFadeOut() {
-        if (this.selection.start === this.selection.end) {
-            alert('Please select a region to apply fade out effect');
+        let startTime, endTime;
+        
+        // Determine what to apply fade to: region selection or selected chunk
+        const hasRegionSelection = this.selection.start !== this.selection.end;
+        const hasChunkSelection = this.chunkManager.selectedChunk !== null;
+        
+        if (hasRegionSelection) {
+            startTime = Math.min(this.selection.start, this.selection.end);
+            endTime = Math.max(this.selection.start, this.selection.end);
+        } else if (hasChunkSelection) {
+            startTime = this.chunkManager.selectedChunk.start;
+            endTime = this.chunkManager.selectedChunk.end;
+        } else {
+            alert('Please select a region or chunk to apply fade out effect');
             return;
         }
-
-        const startTime = Math.min(this.selection.start, this.selection.end);
-        const endTime = Math.max(this.selection.start, this.selection.end);
 
         this.applyFadeEffect(startTime, endTime, 'out');
     }
@@ -1115,6 +1133,10 @@ export class AudioChunkingEditor {
         this.selection.end = 0;
         this.selectionDiv.style.display = 'none';
         
+        // Clear chunk selection after applying fade
+        this.chunkManager.selectedChunk = null;
+        this.chunkManager.updateChunkOverlays();
+        
         // Hide resize handles and clear timeout
         this.hideResizeHandles();
         if (this.resizeHandleTimeout) {
@@ -1127,12 +1149,14 @@ export class AudioChunkingEditor {
         this.updateSelectionClock();
         this.updateDeleteButton();
         this.updateFadeButtons();
+        this.updateChunkInfo();
     }
 
     updateFadeButtons() {
         const hasSelection = this.selection.start !== this.selection.end;
-        this.fadeInBtn.disabled = !hasSelection;
-        this.fadeOutBtn.disabled = !hasSelection;
+        const hasChunkSelected = this.chunkManager.selectedChunk !== null;
+        this.fadeInBtn.disabled = !(hasSelection || hasChunkSelected);
+        this.fadeOutBtn.disabled = !(hasSelection || hasChunkSelected);
     }
 
     clearSelection() {
