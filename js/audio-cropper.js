@@ -52,6 +52,7 @@ export class AudioChunkingEditor {
         this.cropBtn = document.getElementById('cropBtn');
         this.fadeInBtn = document.getElementById('fadeInBtn');
         this.fadeOutBtn = document.getElementById('fadeOutBtn');
+        this.normalizeBtn = document.getElementById('normalizeBtn');
         this.silenceBtn = document.getElementById('silenceBtn');
         this.deleteBtn = document.getElementById('deleteBtn');
         
@@ -123,6 +124,7 @@ export class AudioChunkingEditor {
         this.cropBtn.addEventListener('click', () => this.cropAudio());
         this.fadeInBtn.addEventListener('click', () => this.applyFadeIn());
         this.fadeOutBtn.addEventListener('click', () => this.applyFadeOut());
+        this.normalizeBtn.addEventListener('click', () => this.applyNormalize());
         this.silenceBtn.addEventListener('click', () => this.applySilence());
         this.deleteBtn.addEventListener('click', () => this.delete());
         this.clearSelectionBtn.addEventListener('click', () => this.clearSelection());
@@ -994,6 +996,7 @@ export class AudioChunkingEditor {
             // this.selectionInfo.textContent = 'No selection';
             this.cropBtn.disabled = false; // Always enable crop button when audio is loaded
             this.updateFadeButtons();
+            this.updateNormalizeButton();
             this.updateSilenceButton();
             return;
         }
@@ -1005,6 +1008,7 @@ export class AudioChunkingEditor {
         // this.selectionInfo.textContent = `${start} - ${end} (${duration})`;
         this.cropBtn.disabled = false;
         this.updateFadeButtons();
+        this.updateNormalizeButton();
         this.updateSilenceButton();
     }
 
@@ -1111,6 +1115,7 @@ export class AudioChunkingEditor {
         this.splitBtn.disabled = false;
         this.updateSelectionInfo();
         this.updateFadeButtons();
+        this.updateNormalizeButton();
         this.updateSilenceButton();
     }
 
@@ -1154,6 +1159,27 @@ export class AudioChunkingEditor {
         }
 
         this.applyFadeEffect(startTime, endTime, 'out');
+    }
+
+    applyNormalize() {
+        let startTime, endTime;
+        
+        // Determine what to apply normalize to: region selection or selected chunk
+        const hasRegionSelection = this.selection.start !== this.selection.end;
+        const hasChunkSelection = this.chunkManager.selectedChunk !== null;
+        
+        if (hasRegionSelection) {
+            startTime = Math.min(this.selection.start, this.selection.end);
+            endTime = Math.max(this.selection.start, this.selection.end);
+        } else if (hasChunkSelection) {
+            startTime = this.chunkManager.selectedChunk.start;
+            endTime = this.chunkManager.selectedChunk.end;
+        } else {
+            alert('Please select a region or chunk to apply normalize effect');
+            return;
+        }
+
+        this.applyNormalizeEffect(startTime, endTime);
     }
 
     applySilence() {
@@ -1304,11 +1330,49 @@ export class AudioChunkingEditor {
         this.updateChunkInfo();
     }
 
+    applyNormalizeEffect(startTime, endTime) {
+        if (!this.audioBuffer) return;
+
+        this.audioBuffer = AudioUtils.normalizeAudio(this.audioBuffer, startTime, endTime, this.audioContext);
+        this.waveformRenderer.generateWaveform(this.audioBuffer);
+        
+        // Clear selection after applying normalize
+        this.selection.start = 0;
+        this.selection.end = 0;
+        this.selectionDiv.style.display = 'none';
+        
+        // Clear chunk selection after applying normalize
+        this.chunkManager.selectedChunk = null;
+        this.chunkManager.updateChunkOverlays();
+        
+        // Hide resize handles and clear timeout
+        this.hideResizeHandles();
+        if (this.resizeHandleTimeout) {
+            clearTimeout(this.resizeHandleTimeout);
+            this.resizeHandleTimeout = null;
+        }
+        
+        this.updateSelectionInfo();
+        this.updateSelectionDuration();
+        this.updateSelectionClock();
+        this.updateDeleteButton();
+        this.updateFadeButtons();
+        this.updateNormalizeButton();
+        this.updateSilenceButton();
+        this.updateChunkInfo();
+    }
+
     updateFadeButtons() {
         const hasSelection = this.selection.start !== this.selection.end;
         const hasChunkSelected = this.chunkManager.selectedChunk !== null;
         this.fadeInBtn.disabled = !(hasSelection || hasChunkSelected);
         this.fadeOutBtn.disabled = !(hasSelection || hasChunkSelected);
+    }
+
+    updateNormalizeButton() {
+        const hasSelection = this.selection.start !== this.selection.end;
+        const hasChunkSelected = this.chunkManager.selectedChunk !== null;
+        this.normalizeBtn.disabled = !(hasSelection || hasChunkSelected);
     }
 
     updateSilenceButton() {
@@ -1334,6 +1398,7 @@ export class AudioChunkingEditor {
         this.updateSelectionClock();
         this.updateDeleteButton();
         this.updateFadeButtons();
+        this.updateNormalizeButton();
         this.updateSilenceButton();
         
         // Redraw waveform to clear selection

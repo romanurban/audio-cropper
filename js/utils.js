@@ -99,4 +99,91 @@ export class AudioUtils {
         // Cleanup
         setTimeout(() => URL.revokeObjectURL(url), 100);
     }
+
+    /**
+     * Normalizes audio data to a target level for consistent volume
+     * @param {AudioBuffer} audioBuffer - The audio buffer to normalize
+     * @param {number} startTime - Start time of the region to normalize
+     * @param {number} endTime - End time of the region to normalize
+     * @param {AudioContext} audioContext - Web Audio context
+     * @param {number} targetLevel - Target level in dB (default -3dB)
+     * @returns {AudioBuffer} New normalized audio buffer
+     */
+    static normalizeAudio(audioBuffer, startTime, endTime, audioContext, targetLevel = -3) {
+        const sampleRate = audioBuffer.sampleRate;
+        const channels = audioBuffer.numberOfChannels;
+        const startSample = Math.floor(startTime * sampleRate);
+        const endSample = Math.floor(endTime * sampleRate);
+        
+        // Create new buffer with same properties
+        const newBuffer = audioContext.createBuffer(channels, audioBuffer.length, sampleRate);
+        
+        // Copy all audio data first
+        for (let channel = 0; channel < channels; channel++) {
+            const oldData = audioBuffer.getChannelData(channel);
+            const newData = newBuffer.getChannelData(channel);
+            
+            // Copy all samples
+            for (let i = 0; i < oldData.length; i++) {
+                newData[i] = oldData[i];
+            }
+        }
+        
+        // Find the RMS (Root Mean Square) and peak amplitude in the selected region
+        let sumSquares = 0;
+        let sampleCount = 0;
+        let maxAmplitude = 0;
+        
+        for (let channel = 0; channel < channels; channel++) {
+            const channelData = audioBuffer.getChannelData(channel);
+            for (let i = startSample; i < endSample; i++) {
+                const sample = channelData[i];
+                const amplitude = Math.abs(sample);
+                sumSquares += sample * sample;
+                sampleCount++;
+                if (amplitude > maxAmplitude) {
+                    maxAmplitude = amplitude;
+                }
+            }
+        }
+        
+        // Avoid division by zero
+        if (maxAmplitude === 0 || sampleCount === 0) {
+            return newBuffer; // No normalization needed for silent audio
+        }
+        
+        // Calculate RMS level
+        const rms = Math.sqrt(sumSquares / sampleCount);
+        
+        // Convert target level from dB to linear scale
+        const targetLinear = Math.pow(10, targetLevel / 20);
+        
+        // Calculate normalization factor based on RMS
+        let normalizationFactor = targetLinear / rms;
+        
+        // Ensure we don't exceed the target level with peaks
+        const wouldBePeak = maxAmplitude * normalizationFactor;
+        if (wouldBePeak > targetLinear) {
+            // Use peak-based normalization instead to prevent clipping
+            normalizationFactor = targetLinear / maxAmplitude;
+        }
+        
+        // Safety check to prevent extreme amplification
+        const maxGain = Math.pow(10, 20 / 20); // 20dB max gain
+        if (normalizationFactor > maxGain) {
+            normalizationFactor = maxGain;
+        }
+        
+        // Apply normalization to the selected region
+        for (let channel = 0; channel < channels; channel++) {
+            const newData = newBuffer.getChannelData(channel);
+            for (let i = startSample; i < endSample; i++) {
+                newData[i] *= normalizationFactor;
+                // Hard clip to prevent values exceeding [-1, 1]
+                newData[i] = Math.max(-1, Math.min(1, newData[i]));
+            }
+        }
+        
+        return newBuffer;
+    }
 }
