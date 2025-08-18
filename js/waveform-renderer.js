@@ -729,7 +729,7 @@ export class WaveformRenderer {
         
         // Use the existing waveform container directly as scroll container
         this.scrollContainer = this.canvas.parentElement;
-        this.scrollContainer.style.overflowX = 'auto';
+        this.scrollContainer.style.overflowX = 'hidden'; // Start with hidden, enable only when zoomed
         this.scrollContainer.style.overflowY = 'hidden';
         
         // Force the scrollbar styles to be applied
@@ -1063,15 +1063,22 @@ export class WaveformRenderer {
             this.canvas.style.width = canvasWidth + 'px';
             this.canvas.width = canvasWidth;
             
+            // Ensure overflow is enabled for zoom
+            this.scrollContainer.style.overflowX = 'auto';
+            
             console.log('Zoom update: containerWidth=', containerWidth, 'canvasWidth=', canvasWidth, 'zoomLevel=', this.zoomLevel);
             console.log('After update - ScrollContainer scrollWidth:', this.scrollContainer.scrollWidth, 'clientWidth:', this.scrollContainer.clientWidth);
         } else {
-            // Reset to normal size when not zoomed
+            // Reset to normal size when not zoomed and disable horizontal scroll
             const containerWidth = this.scrollContainer.clientWidth;
             
             // Reset canvas to container width
             this.canvas.style.width = '100%';
             this.canvas.width = containerWidth;
+            
+            // Disable horizontal overflow when not zoomed
+            this.scrollContainer.style.overflowX = 'hidden';
+            this.scrollContainer.scrollLeft = 0; // Reset any scroll position
         }
     }
 
