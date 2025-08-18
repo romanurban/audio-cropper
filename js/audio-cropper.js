@@ -680,27 +680,12 @@ export class AudioChunkingEditor {
             
             if (startX >= 0 && endX >= 0) {
                 const leftX = Math.min(startX, endX);
-                const rightX = Math.max(startX, endX);
+                const width = Math.max(1, Math.abs(endX - startX));
                 
-                // Get the scroll container rect for positioning the selection div
-                const containerRect = this.waveformRenderer.scrollContainer.getBoundingClientRect();
-                const scrollLeft = this.waveformRenderer.scrollContainer.scrollLeft;
-                
-                // Convert absolute canvas positions to visible container positions
-                const visibleLeftX = leftX - scrollLeft;
-                const visibleRightX = rightX - scrollLeft;
-                
-                // Only show selection if it's at least partially visible
-                if (visibleRightX >= 0 && visibleLeftX <= containerRect.width) {
-                    const clampedLeftX = Math.max(0, visibleLeftX);
-                    const clampedRightX = Math.min(containerRect.width, visibleRightX);
-                    
-                    this.selectionDiv.style.left = (clampedLeftX / containerRect.width * 100) + '%';
-                    this.selectionDiv.style.width = ((clampedRightX - clampedLeftX) / containerRect.width * 100) + '%';
-                    this.selectionDiv.style.display = 'block';
-                } else {
-                    this.selectionDiv.style.display = 'none';
-                }
+                // Position in content coordinates; the scroller will clip/scroll it
+                this.selectionDiv.style.left = `${leftX}px`;
+                this.selectionDiv.style.width = `${width}px`;
+                this.selectionDiv.style.display = 'block';
             } else {
                 this.selectionDiv.style.display = 'none';
             }
