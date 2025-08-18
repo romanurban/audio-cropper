@@ -623,7 +623,7 @@ export class AudioChunkingEditor {
             await this.audioPlayer.playAllChunks(this.audioBuffer, this.chunkManager.chunks);
         }
         
-        this.playBtn.textContent = '⏸️ Pause';
+        this.playBtn.textContent = '⏸';
         this.animateProgress();
     }
 
@@ -639,7 +639,7 @@ export class AudioChunkingEditor {
         if (!this.audioPlayer.isPlaying) return;
         
         this.audioPlayer.pause();
-        this.playBtn.textContent = '▶️ Play';
+        this.playBtn.textContent = '▷';
         
         this.waveformRenderer.drawWaveform(this.audioBuffer, this.seekPosition, this.audioPlayer.getCurrentPlaybackTime());
         this.updateCurrentTime();
@@ -647,7 +647,7 @@ export class AudioChunkingEditor {
 
     stop() {
         this.audioPlayer.stop(this.chunkManager.chunks);
-        this.playBtn.textContent = '▶️ Play';
+        this.playBtn.textContent = '▷';
         
         this.waveformRenderer.drawWaveform(this.audioBuffer, this.seekPosition, this.audioPlayer.getCurrentPlaybackTime());
         this.updateCurrentTime();
@@ -656,7 +656,7 @@ export class AudioChunkingEditor {
     animateProgress() {
         if (!this.audioPlayer.isPlaying) {
             // Reset play button when audio stops
-            this.playBtn.textContent = '▶️ Play';
+            this.playBtn.textContent = '▷';
             if (this.playProgressPosition) {
                 this.playProgressPosition.style.display = 'none';
             }
@@ -688,7 +688,7 @@ export class AudioChunkingEditor {
         
         try {
             
-            this.cropBtn.textContent = '🔄 Processing...';
+            this.cropBtn.textContent = '🔄';
             this.cropBtn.disabled = true;
             
             const sampleRate = this.audioBuffer.sampleRate;
@@ -714,7 +714,7 @@ export class AudioChunkingEditor {
             
             AudioUtils.downloadBlob(blob, filename);
             
-            this.cropBtn.textContent = '📏 Crop Selection';
+            this.cropBtn.textContent = '📏';
             this.cropBtn.disabled = false;
             
             console.log(`Cropped audio: ${start.toFixed(2)}s to ${end.toFixed(2)}s`);
@@ -722,7 +722,7 @@ export class AudioChunkingEditor {
         } catch (error) {
             console.error('Error cropping audio:', error);
             alert('Error cropping audio. Please try again.');
-            this.cropBtn.textContent = '📏 Crop Selection';
+            this.cropBtn.textContent = '📏';
             this.cropBtn.disabled = false;
         }
     }
