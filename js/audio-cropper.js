@@ -408,7 +408,22 @@ export class AudioChunkingEditor {
         // Get coordinates relative to the canvas
         const rect = this.canvas.getBoundingClientRect();
         const x = event.clientX - rect.left;
-        const currentTime = this.waveformRenderer.getTimeFromMousePosition(x);
+        let currentTime = this.waveformRenderer.getTimeFromMousePosition(x);
+        
+        // Add snap-to-end functionality when dragging near canvas edges
+        if (this.dragStarted && this.audioBuffer) {
+            const snapThreshold = 30; // pixels from edge to trigger snap
+            const canvasWidth = rect.width;
+            
+            // Snap to start (0) when dragging near left edge
+            if (x <= snapThreshold) {
+                currentTime = 0;
+            }
+            // Snap to end (duration) when dragging near right edge
+            else if (x >= canvasWidth - snapThreshold) {
+                currentTime = this.audioBuffer.duration;
+            }
+        }
         
         if (!this.dragStarted && Math.abs(currentTime - this.initialClickTime) > 0.1) {
             this.dragStarted = true;
