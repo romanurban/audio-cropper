@@ -15,6 +15,9 @@ export class AudioPlayer {
         this.isPlayingSelection = false;
         this.selectionStartTime = 0;
         this.selectionEndTime = 0;
+        this.isLooping = false;
+        this.loopAudioBuffer = null;
+        this.loopSelection = null;
     }
 
     /**
@@ -24,6 +27,23 @@ export class AudioPlayer {
     getCurrentPlaybackTime() {
         if (!this.isPlaying) return this.pausedAtTime;
         return this.pausedAtTime + (this.audioContext.currentTime - this.playStartTime);
+    }
+
+    /**
+     * Toggles loop mode
+     * @returns {boolean} New loop state
+     */
+    toggleLoop() {
+        this.isLooping = !this.isLooping;
+        return this.isLooping;
+    }
+
+    /**
+     * Sets loop mode
+     * @param {boolean} enabled - Whether to enable loop mode
+     */
+    setLoop(enabled) {
+        this.isLooping = enabled;
     }
 
     /**
@@ -75,10 +95,20 @@ export class AudioPlayer {
         this.selectionStartTime = startTime;
         this.selectionEndTime = endTime;
         
-        // Auto-stop when selection ends
+        // Store for looping
+        this.loopAudioBuffer = audioBuffer;
+        this.loopSelection = selection;
+        
+        // Auto-stop or loop when selection ends
         this.source.onended = () => {
             if (this.isPlaying) {
-                this.stop();
+                if (this.isLooping) {
+                    // Reset position to start of selection and play again
+                    this.pausedAtTime = startTime;
+                    this.playSelection(this.loopAudioBuffer, this.loopSelection);
+                } else {
+                    this.stop();
+                }
             }
         };
     }
@@ -106,10 +136,20 @@ export class AudioPlayer {
         this.isPlaying = true;
         this.currentlyPlayingChunk = chunk;
         
-        // Auto-stop when chunk ends
+        // Store for looping
+        this.loopAudioBuffer = audioBuffer;
+        this.loopSelection = null; // Not playing a selection
+        
+        // Auto-stop or loop when chunk ends
         this.source.onended = () => {
             if (this.isPlaying) {
-                this.stop();
+                if (this.isLooping) {
+                    // Reset position to start of chunk and play again
+                    this.pausedAtTime = chunk.start;
+                    this.playChunk(this.loopAudioBuffer, chunk);
+                } else {
+                    this.stop();
+                }
             }
         };
     }
@@ -160,10 +200,21 @@ export class AudioPlayer {
         this.playingChunks = sortedChunks.slice(startChunkIndex);
         this.playingStartOffset = startOffset;
         
-        // Auto-stop when audio ends
+        // Store for looping
+        this.loopAudioBuffer = audioBuffer;
+        this.loopSelection = null; // Not playing a selection
+        
+        // Auto-stop or loop when audio ends
         this.source.onended = () => {
             if (this.isPlaying) {
-                this.stop();
+                if (this.isLooping) {
+                    // Reset position to start of first chunk and play again
+                    const firstChunk = sortedChunks[0];
+                    this.pausedAtTime = firstChunk.start;
+                    this.playAllChunks(this.loopAudioBuffer, chunks);
+                } else {
+                    this.stop();
+                }
             }
         };
     }
@@ -180,6 +231,7 @@ export class AudioPlayer {
         this.currentlyPlayingChunk = null;
         this.playingChunks = null;
         this.isPlayingSelection = false;
+        // Keep loop state and stored audio for resume
     }
 
     /**
@@ -194,6 +246,10 @@ export class AudioPlayer {
         this.currentlyPlayingChunk = null;
         this.playingChunks = null;
         this.isPlayingSelection = false;
+        
+        // Clear loop storage when stopping completely
+        this.loopAudioBuffer = null;
+        this.loopSelection = null;
         
         // Reset to beginning of first chunk
         if (chunks.length > 0) {

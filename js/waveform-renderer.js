@@ -910,8 +910,8 @@ export class WaveformRenderer {
         // Zoom out button: disabled when at normal zoom (1.0) or below
         this.zoomOutBtn.disabled = (this.zoomLevel <= 1.0);
         
-        // Reset button: disabled when at normal zoom (1.0)
-        this.zoomResetBtn.disabled = (this.zoomLevel === 1.0);
+        // Reset button: always enabled
+        this.zoomResetBtn.disabled = false;
     }
 
     /**

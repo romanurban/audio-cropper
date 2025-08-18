@@ -47,6 +47,7 @@ export class AudioChunkingEditor {
         // Controls
         this.playBtn = document.getElementById('playBtn');
         this.stopBtn = document.getElementById('stopBtn');
+        this.loopBtn = document.getElementById('loopBtn');
         this.splitBtn = document.getElementById('splitBtn');
         this.cropBtn = document.getElementById('cropBtn');
         this.fadeInBtn = document.getElementById('fadeInBtn');
@@ -117,6 +118,7 @@ export class AudioChunkingEditor {
         // Controls
         this.playBtn.addEventListener('click', () => this.togglePlayPause());
         this.stopBtn.addEventListener('click', () => this.stop());
+        this.loopBtn.addEventListener('click', () => this.toggleLoop());
         this.splitBtn.addEventListener('click', () => this.splitAtPosition());
         this.cropBtn.addEventListener('click', () => this.cropAudio());
         this.fadeInBtn.addEventListener('click', () => this.applyFadeIn());
@@ -847,7 +849,8 @@ export class AudioChunkingEditor {
             await this.audioPlayer.playAllChunks(this.audioBuffer, this.chunkManager.chunks);
         }
         
-        this.playBtn.textContent = '⏸';
+        this.playBtn.textContent = '⏸︎';
+        this.playBtn.setAttribute('data-pause', 'true');
         this.animateProgress();
     }
 
@@ -859,11 +862,36 @@ export class AudioChunkingEditor {
         }
     }
 
+    toggleLoop() {
+        if (!this.audioPlayer) return;
+        
+        const isLooping = this.audioPlayer.toggleLoop();
+        this.updateLoopButton(isLooping);
+        console.log(`Loop ${isLooping ? 'enabled' : 'disabled'}`);
+    }
+
+    updateLoopButton(isLooping) {
+        if (isLooping) {
+            this.loopBtn.classList.add('active');
+            this.loopBtn.style.background = 'linear-gradient(135deg, rgba(76, 175, 80, 0.6), rgba(69, 160, 73, 0.5))';
+            this.loopBtn.style.borderColor = '#4CAF50';
+            this.loopBtn.style.color = '#ffffff';
+            this.loopBtn.style.boxShadow = '0 0 16px rgba(76, 175, 80, 0.8), inset 0 1px 2px rgba(76, 175, 80, 0.5)';
+        } else {
+            this.loopBtn.classList.remove('active');
+            this.loopBtn.style.background = '';
+            this.loopBtn.style.borderColor = '';
+            this.loopBtn.style.color = '';
+            this.loopBtn.style.boxShadow = '';
+        }
+    }
+
     pause() {
         if (!this.audioPlayer.isPlaying) return;
         
         this.audioPlayer.pause();
         this.playBtn.textContent = '▷';
+        this.playBtn.removeAttribute('data-pause');
         
         this.waveformRenderer.drawWaveform(this.audioBuffer, this.seekPosition, this.audioPlayer.getCurrentPlaybackTime());
         this.updateCurrentTime();
@@ -872,6 +900,7 @@ export class AudioChunkingEditor {
     stop() {
         this.audioPlayer.stop(this.chunkManager.chunks);
         this.playBtn.textContent = '▷';
+        this.playBtn.removeAttribute('data-pause');
         
         this.waveformRenderer.drawWaveform(this.audioBuffer, this.seekPosition, this.audioPlayer.getCurrentPlaybackTime());
         this.updateCurrentTime();
@@ -881,6 +910,7 @@ export class AudioChunkingEditor {
         if (!this.audioPlayer.isPlaying) {
             // Reset play button when audio stops
             this.playBtn.textContent = '▷';
+            this.playBtn.removeAttribute('data-pause');
             if (this.playProgressPosition) {
                 this.playProgressPosition.style.display = 'none';
             }
@@ -1077,6 +1107,7 @@ export class AudioChunkingEditor {
     enableControls() {
         this.playBtn.disabled = false;
         this.stopBtn.disabled = false;
+        this.loopBtn.disabled = false;
         this.splitBtn.disabled = false;
         this.updateSelectionInfo();
         this.updateFadeButtons();

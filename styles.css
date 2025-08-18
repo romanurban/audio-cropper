@@ -402,6 +402,12 @@ input[type="file"] {
     opacity: 1;
 }
 
+/* Fix pause button alignment */
+.control-buttons .btn[data-pause="true"] {
+    padding-top: 6px;
+    padding-bottom: 0;
+}
+
 .play-progress-position {
     margin-left: 8px;
     padding: 3px 6px;
