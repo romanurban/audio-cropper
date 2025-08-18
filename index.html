@@ -11,7 +11,7 @@
         <h1>🎵 Audio Editor</h1>
         
         <div class="upload-area" id="uploadArea">
-            <p>Drag & drop an audio file here or click to browse</p>
+            <p class="upload-text">Drag & drop an audio file here or <span class="click-to-browse" onclick="document.getElementById('fileInput').click()">click to browse</span></p>
             <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
                 Choose Audio File
             </button>
@@ -19,15 +19,7 @@
         </div>
         
         <div class="waveform-container" id="waveformContainer">
-            <div class="waveform" id="waveform">
-                <canvas id="waveformCanvas"></canvas>
-                <div class="selection" id="selection" style="display: none;">
-                    <div class="selection-resize-handle left" id="leftHandle"></div>
-                    <div class="selection-resize-handle right" id="rightHandle"></div>
-                </div>
-            </div>
-            
-            <div class="instructions">
+            <div class="control-panel">
                 <div class="zoom-controls-strip">
                     <div class="left-section">
                         <div class="zoom-buttons-vertical">
@@ -66,6 +58,14 @@
                 </div>
             </div>
             
+            <div class="waveform" id="waveform">
+                <canvas id="waveformCanvas"></canvas>
+                <div class="selection" id="selection" style="display: none;">
+                    <div class="selection-resize-handle left" id="leftHandle"></div>
+                    <div class="selection-resize-handle right" id="rightHandle"></div>
+                </div>
+            </div>
+            
             <div class="controls">
                 <button class="btn btn-primary" id="playBtn" disabled title="Play/Pause">▷</button>
                 <button class="btn btn-secondary" id="stopBtn" disabled title="Stop">◼</button>
@@ -74,15 +74,6 @@
                 <button class="btn btn-info" id="fadeInBtn" disabled title="Apply Fade In">↗</button>
                 <button class="btn btn-info" id="fadeOutBtn" disabled title="Apply Fade Out">↘</button>
                 <button class="btn btn-danger" id="deleteBtn" disabled title="Delete Selection">✕</button>
-            </div>
-            
-            
-            <div class="info" id="info">
-                <div>Selection: <span id="selectionInfo">No selection</span></div>
-                <div>Chunks: <span id="chunkCount">1</span></div>
-                <div class="chunk-info" id="chunkInfo" style="display: none;">
-                    <strong>Selected Chunk:</strong> <span id="selectedChunkInfo">None</span>
-                </div>
             </div>
             
             <div class="progress" id="progress">

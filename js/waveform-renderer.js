@@ -732,7 +732,7 @@ export class WaveformRenderer {
      * Sets up zoom control overlays
      */
     setupZoomControls() {
-        // Find the zoom controls in the instructions strip
+        // Find the zoom controls in the control panel strip
         this.zoomControls = document.querySelector('.zoom-controls-strip');
         if (!this.zoomControls) {
             console.warn('Zoom controls strip not found');

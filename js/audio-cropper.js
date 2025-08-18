@@ -56,10 +56,11 @@ export class AudioChunkingEditor {
         // Info displays
         this.durationSpan = document.getElementById('duration');
         this.currentTimeSpan = document.getElementById('currentTime');
-        this.selectionInfo = document.getElementById('selectionInfo');
-        this.chunkCount = document.getElementById('chunkCount');
-        this.chunkInfo = document.getElementById('chunkInfo');
-        this.selectedChunkInfo = document.getElementById('selectedChunkInfo');
+        // Removed info elements
+        // this.selectionInfo = document.getElementById('selectionInfo');
+        // this.chunkCount = document.getElementById('chunkCount');
+        // this.chunkInfo = document.getElementById('chunkInfo');
+        // this.selectedChunkInfo = document.getElementById('selectedChunkInfo');
         this.playProgressPosition = null; // Removed from zoom bar
         this.hoverPosition = null; // Removed from zoom bar
         this.mousePositionTime = document.getElementById('mousePositionTime');
@@ -162,6 +163,9 @@ export class AudioChunkingEditor {
     async handleFile(file) {
         if (!file.type.startsWith('audio/')) {
             alert('Please select an audio file');
+            // Reset upload area to full size for invalid files
+            this.uploadArea.classList.remove('compact');
+            this.resetUploadText();
             return;
         }
         
@@ -202,6 +206,13 @@ export class AudioChunkingEditor {
             
             this.waveformContainer.style.display = 'block';
             
+            // Make upload area compact when file is loaded
+            this.uploadArea.classList.add('compact');
+            
+            // Update text for compact mode
+            const uploadText = this.uploadArea.querySelector('.upload-text');
+            uploadText.innerHTML = 'Drag & drop another audio file here or <span class="click-to-browse" onclick="document.getElementById(\'fileInput\').click()">click to browse</span>';
+            
             requestAnimationFrame(() => {
                 this.waveformRenderer.generateWaveform(this.audioBuffer);
                 this.updateProgress(100);
@@ -221,11 +232,20 @@ export class AudioChunkingEditor {
             console.error('Error processing audio file:', error);
             alert('Error processing audio file. Please try another file.');
             this.progress.style.display = 'none';
+            
+            // Reset upload area to full size on error
+            this.uploadArea.classList.remove('compact');
+            this.resetUploadText();
         }
     }
 
     updateProgress(percent) {
         this.progressBar.style.width = percent + '%';
+    }
+
+    resetUploadText() {
+        const uploadText = this.uploadArea.querySelector('.upload-text');
+        uploadText.innerHTML = 'Drag & drop an audio file here or <span class="click-to-browse" onclick="document.getElementById(\'fileInput\').click()">click to browse</span>';
     }
 
     updateMouseEventListeners() {
@@ -934,7 +954,7 @@ export class AudioChunkingEditor {
         const hasChunkSelection = this.chunkManager.selectedChunk !== null;
         
         if (!hasRegionSelection) {
-            this.selectionInfo.textContent = 'No selection';
+            // this.selectionInfo.textContent = 'No selection';
             this.cropBtn.disabled = !hasChunkSelection;
             this.updateFadeButtons();
             return;
@@ -944,7 +964,7 @@ export class AudioChunkingEditor {
         const start = AudioUtils.formatTime(this.selection.start);
         const end = AudioUtils.formatTime(this.selection.end);
         const duration = AudioUtils.formatTime(Math.abs(this.selection.end - this.selection.start));
-        this.selectionInfo.textContent = `${start} - ${end} (${duration})`;
+        // this.selectionInfo.textContent = `${start} - ${end} (${duration})`;
         this.cropBtn.disabled = false;
         this.updateFadeButtons();
     }
@@ -1014,17 +1034,18 @@ export class AudioChunkingEditor {
     }
 
     updateChunkInfo() {
-        const chunkInfo = this.chunkManager.getChunkInfo();
-        this.chunkCount.textContent = chunkInfo.count;
+        // Chunk info display removed - method kept for compatibility
+        // const chunkInfo = this.chunkManager.getChunkInfo();
+        // this.chunkCount.textContent = chunkInfo.count;
         
-        if (chunkInfo.selected) {
-            const duration = chunkInfo.selected.end - chunkInfo.selected.start;
-            const info = `Chunk ${chunkInfo.selected.id + 1} | ${AudioUtils.formatTime(chunkInfo.selected.start)} - ${AudioUtils.formatTime(chunkInfo.selected.end)} | Duration: ${AudioUtils.formatTime(duration)}`;
-            this.selectedChunkInfo.textContent = info;
-            this.chunkInfo.style.display = 'block';
-        } else {
-            this.chunkInfo.style.display = 'none';
-        }
+        // if (chunkInfo.selected) {
+        //     const duration = chunkInfo.selected.end - chunkInfo.selected.start;
+        //     const info = `Chunk ${chunkInfo.selected.id + 1} | ${AudioUtils.formatTime(chunkInfo.selected.start)} - ${AudioUtils.formatTime(chunkInfo.selected.end)} | Duration: ${AudioUtils.formatTime(duration)}`;
+        //     this.selectedChunkInfo.textContent = info;
+        //     this.chunkInfo.style.display = 'block';
+        // } else {
+        //     this.chunkInfo.style.display = 'none';
+        // }
     }
 
     updateDeleteButton() {
