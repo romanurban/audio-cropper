@@ -906,13 +906,13 @@ export class AudioChunkingEditor {
             start = this.chunkManager.selectedChunk.start;
             end = this.chunkManager.selectedChunk.end;
         } else {
-            alert('Please select a portion of the audio to crop or select a chunk');
-            return;
+            // No selection - download entire audio file
+            start = 0;
+            end = this.audioBuffer.duration;
         }
         
         try {
             
-            this.cropBtn.textContent = '🔄';
             this.cropBtn.disabled = true;
             
             const sampleRate = this.audioBuffer.sampleRate;
@@ -934,11 +934,17 @@ export class AudioChunkingEditor {
             
             const wavArrayBuffer = AudioUtils.audioBufferToWav(newBuffer);
             const blob = new Blob([wavArrayBuffer], { type: 'audio/wav' });
-            const filename = `cropped_audio_${start.toFixed(1)}s-${end.toFixed(1)}s.wav`;
+            
+            // Generate appropriate filename based on whether anything was selected
+            let filename;
+            if (hasRegionSelection || hasChunkSelection) {
+                filename = `cropped_audio_${start.toFixed(1)}s-${end.toFixed(1)}s.wav`;
+            } else {
+                filename = `audio_export_${new Date().getTime()}.wav`;
+            }
             
             AudioUtils.downloadBlob(blob, filename);
             
-            this.cropBtn.textContent = '📏';
             this.cropBtn.disabled = false;
             
             console.log(`Cropped audio: ${start.toFixed(2)}s to ${end.toFixed(2)}s`);
@@ -946,7 +952,6 @@ export class AudioChunkingEditor {
         } catch (error) {
             console.error('Error cropping audio:', error);
             alert('Error cropping audio. Please try again.');
-            this.cropBtn.textContent = '📏';
             this.cropBtn.disabled = false;
         }
     }
@@ -957,7 +962,7 @@ export class AudioChunkingEditor {
         
         if (!hasRegionSelection) {
             // this.selectionInfo.textContent = 'No selection';
-            this.cropBtn.disabled = !hasChunkSelection;
+            this.cropBtn.disabled = false; // Always enable crop button when audio is loaded
             this.updateFadeButtons();
             this.updateSilenceButton();
             return;
