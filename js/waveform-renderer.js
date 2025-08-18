@@ -48,21 +48,59 @@ export class WaveformRenderer {
      */
     generateWaveform(audioBuffer) {
         this.audioBuffer = audioBuffer;
-        const channelData = audioBuffer.getChannelData(0);
-        const samples = Math.floor(channelData.length / 1000);
-        this.waveformData = [];
+        const channelCount = audioBuffer.numberOfChannels;
         
-        for (let i = 0; i < 1000; i++) {
-            const start = Math.floor(i * samples);
-            const end = Math.floor((i + 1) * samples);
-            let max = 0;
+        // For stereo, process both channels separately
+        if (channelCount >= 2) {
+            const leftChannelData = audioBuffer.getChannelData(0);
+            const rightChannelData = audioBuffer.getChannelData(1);
+            const samples = Math.floor(leftChannelData.length / 1000);
             
-            for (let j = start; j < end; j++) {
-                const sample = Math.abs(channelData[j]);
-                if (sample > max) max = sample;
+            this.waveformData = {
+                left: [],
+                right: []
+            };
+            
+            for (let i = 0; i < 1000; i++) {
+                const start = Math.floor(i * samples);
+                const end = Math.floor((i + 1) * samples);
+                let leftMax = 0;
+                let rightMax = 0;
+                
+                for (let j = start; j < end; j++) {
+                    const leftSample = Math.abs(leftChannelData[j]);
+                    const rightSample = Math.abs(rightChannelData[j]);
+                    if (leftSample > leftMax) leftMax = leftSample;
+                    if (rightSample > rightMax) rightMax = rightSample;
+                }
+                
+                this.waveformData.left.push(leftMax);
+                this.waveformData.right.push(rightMax);
             }
+        } else {
+            // For mono, use the existing structure but store in both left and right
+            const channelData = audioBuffer.getChannelData(0);
+            const samples = Math.floor(channelData.length / 1000);
             
-            this.waveformData.push(max);
+            this.waveformData = {
+                left: [],
+                right: []
+            };
+            
+            for (let i = 0; i < 1000; i++) {
+                const start = Math.floor(i * samples);
+                const end = Math.floor((i + 1) * samples);
+                let max = 0;
+                
+                for (let j = start; j < end; j++) {
+                    const sample = Math.abs(channelData[j]);
+                    if (sample > max) max = sample;
+                }
+                
+                // For mono, use the same data for both channels
+                this.waveformData.left.push(max);
+                this.waveformData.right.push(max);
+            }
         }
         
         // Force canvas resize and redraw
@@ -126,24 +164,30 @@ export class WaveformRenderer {
         
         if (this.zoomLevel > 1.0) {
             // When zoomed, draw the entire audio across the zoomed canvas width
-            const totalSamples = this.waveformData.length;
+            const totalSamples = this.waveformData.left.length;
             const barWidth = width / totalSamples;
             
             // Draw all waveform data across the wider canvas
             for (let i = 0; i < totalSamples; i++) {
-                if (i < this.waveformData.length) {
-                    this.ctx.fillStyle = '#4CAF50';
-                    
-                    const barHeight = this.waveformData[i] * height * 0.8;
+                if (i < this.waveformData.left.length) {
                     const x = i * barWidth;
                     const waveformAreaHeight = height - 25; // Leave space for time scale at top
-                    const y = 25 + (waveformAreaHeight - barHeight) / 2;
-                    
-                    // Ensure minimum bar height for visibility
-                    const minHeight = Math.max(1, barHeight);
+                    const channelHeight = waveformAreaHeight / 2;
                     const actualBarWidth = Math.max(0.5, barWidth - 0.5);
                     
-                    this.ctx.fillRect(x, y, actualBarWidth, minHeight);
+                    // Draw left channel (top half)
+                    this.ctx.fillStyle = '#4CAF50'; // Green for left channel
+                    const leftBarHeight = this.waveformData.left[i] * channelHeight * 0.8;
+                    const leftY = 25 + (channelHeight - leftBarHeight) / 2;
+                    const leftMinHeight = Math.max(1, leftBarHeight);
+                    this.ctx.fillRect(x, leftY, actualBarWidth, leftMinHeight);
+                    
+                    // Draw right channel (bottom half)
+                    this.ctx.fillStyle = '#66BB6A'; // Lighter green for right channel
+                    const rightBarHeight = this.waveformData.right[i] * channelHeight * 0.8;
+                    const rightY = 25 + channelHeight + (channelHeight - rightBarHeight) / 2;
+                    const rightMinHeight = Math.max(1, rightBarHeight);
+                    this.ctx.fillRect(x, rightY, actualBarWidth, rightMinHeight);
                 }
             }
         } else {
@@ -185,8 +229,8 @@ export class WaveformRenderer {
                 // Calculate which part of the original waveform this visible chunk represents
                 const chunkStartRatio = chunkStart / audioBuffer.duration;
                 const chunkEndRatio = chunkEnd / audioBuffer.duration;
-                const startSample = Math.floor(chunkStartRatio * this.waveformData.length);
-                const endSample = Math.ceil(chunkEndRatio * this.waveformData.length);
+                const startSample = Math.floor(chunkStartRatio * this.waveformData.left.length);
+                const endSample = Math.ceil(chunkEndRatio * this.waveformData.left.length);
                 const chunkSamples = endSample - startSample;
                 
                 if (chunkSamples > 0) {
@@ -195,19 +239,25 @@ export class WaveformRenderer {
                     // Draw this chunk's waveform
                     for (let i = 0; i < chunkSamples; i++) {
                         const sampleIndex = startSample + i;
-                        if (sampleIndex < this.waveformData.length) {
-                            this.ctx.fillStyle = '#4CAF50';
-                            
-                            const barHeight = this.waveformData[sampleIndex] * height * 0.8;
+                        if (sampleIndex < this.waveformData.left.length) {
                             const x = currentX + (i * barWidth);
                             const waveformAreaHeight = height - 25; // Leave space for time scale at top
-                            const y = 25 + (waveformAreaHeight - barHeight) / 2;
-                            
-                            // Ensure minimum bar height for visibility
-                            const minHeight = Math.max(1, barHeight);
+                            const channelHeight = waveformAreaHeight / 2;
                             const actualBarWidth = Math.max(0.5, barWidth - 0.5);
                             
-                            this.ctx.fillRect(x, y, actualBarWidth, minHeight);
+                            // Draw left channel (top half)
+                            this.ctx.fillStyle = '#4CAF50'; // Green for left channel
+                            const leftBarHeight = this.waveformData.left[sampleIndex] * channelHeight * 0.8;
+                            const leftY = 25 + (channelHeight - leftBarHeight) / 2;
+                            const leftMinHeight = Math.max(1, leftBarHeight);
+                            this.ctx.fillRect(x, leftY, actualBarWidth, leftMinHeight);
+                            
+                            // Draw right channel (bottom half)
+                            this.ctx.fillStyle = '#66BB6A'; // Lighter green for right channel
+                            const rightBarHeight = this.waveformData.right[sampleIndex] * channelHeight * 0.8;
+                            const rightY = 25 + channelHeight + (channelHeight - rightBarHeight) / 2;
+                            const rightMinHeight = Math.max(1, rightBarHeight);
+                            this.ctx.fillRect(x, rightY, actualBarWidth, rightMinHeight);
                         }
                     }
                 }
@@ -216,6 +266,9 @@ export class WaveformRenderer {
                 currentX += chunkWidth + gapWidth;
             });
         }
+        
+        // Draw separator line between channels
+        this.drawChannelSeparator();
         
         // Draw time scale at bottom
         this.drawTimeScale(audioBuffer);
@@ -232,6 +285,25 @@ export class WaveformRenderer {
         this.drawSeekLine(seekPosition, audioBuffer);
         
         console.log('Waveform drawn successfully with zoom level:', this.zoomLevel);
+    }
+
+    /**
+     * Draws a separator line between left and right channels
+     */
+    drawChannelSeparator() {
+        const height = this.canvas.height;
+        const width = this.canvas.width;
+        const waveformAreaHeight = height - 25; // Leave space for time scale at top
+        const separatorY = 25 + waveformAreaHeight / 2;
+        
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        this.ctx.lineWidth = 1;
+        this.ctx.setLineDash([2, 2]);
+        this.ctx.beginPath();
+        this.ctx.moveTo(0, separatorY);
+        this.ctx.lineTo(width, separatorY);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]); // Reset line dash
     }
 
     /**
