@@ -1121,11 +1121,9 @@ export class WaveformRenderer {
             return this.getTimeFromPixelPosition(mouseX);
         }
 
-        // Zoomed: need ABSOLUTE canvas X, i.e. visibleX + scrollLeft
-        const scrollLeft = this.scrollContainer ? this.scrollContainer.scrollLeft : 0;
+        // Zoomed: handlers already pass absolute canvas X
         const totalWidth = this.canvas.width;
-        const absoluteX = mouseX + scrollLeft;
-        const clampedX = Math.max(0, Math.min(totalWidth, absoluteX));
+        const clampedX = Math.max(0, Math.min(totalWidth, mouseX));
         const timeRatio = clampedX / totalWidth;
         return timeRatio * this.audioBuffer.duration;
     }
