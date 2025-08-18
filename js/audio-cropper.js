@@ -185,6 +185,14 @@ export class AudioChunkingEditor {
             this.audioPlayer.isPlaying = false;
             this.selection = { start: 0, end: 0 };
             
+            // Clear selection UI and resize handles
+            this.selectionDiv.style.display = 'none';
+            this.hideResizeHandles();
+            if (this.resizeHandleTimeout) {
+                clearTimeout(this.resizeHandleTimeout);
+                this.resizeHandleTimeout = null;
+            }
+            
             // Initialize components with new audio
             this.chunkManager.initializeChunks(this.audioBuffer);
             this.waveformRenderer.chunks = this.chunkManager.chunks;
@@ -328,14 +336,30 @@ export class AudioChunkingEditor {
         const selectionEnd = Math.max(this.selection.start, this.selection.end);
         const clickInSelection = hasSelection && clickTime >= selectionStart && clickTime <= selectionEnd;
         
-        // If clicking within selection and handles are visible, don't start new drag
-        if (clickInSelection && this.resizeHandlesVisible) {
+        // If clicking within selection, just reposition seek marker without starting new drag
+        if (clickInSelection) {
+            this.seekPosition = clickTime;
+            // Redraw waveform to show updated seek position within selection
+            this.waveformRenderer.drawWaveform(this.audioBuffer, this.seekPosition, this.audioPlayer.getCurrentPlaybackTime(), this.selection);
+            
+            // Reactivate resize handles when clicking within selection
+            const selectionWidth = Math.abs(this.selection.end - this.selection.start);
+            if (selectionWidth >= this.minSelectionWidth && !this.resizeHandlesVisible) {
+                this.showResizeHandles();
+            }
+            
+            // Enable split button only if we have a valid seek position in a chunk
+            const seekChunk = this.chunkManager.chunks.find(chunk => 
+                clickTime >= chunk.start && clickTime <= chunk.end
+            );
+            this.splitBtn.disabled = !seekChunk;
             return;
         }
         
         this.isDragging = true;
         this.dragStarted = false;
         
+        // Clear existing selection when starting new drag
         this.selection.start = clickTime;
         this.selection.end = clickTime;
         this.seekPosition = clickTime;
@@ -391,18 +415,31 @@ export class AudioChunkingEditor {
         if (!this.isDragging || this.isResizing) return;
         
         if (!this.dragStarted) {
+            // Check if click was within existing selection
+            const hasSelection = this.selection.start !== this.selection.end;
+            const selectionStart = Math.min(this.selection.start, this.selection.end);
+            const selectionEnd = Math.max(this.selection.start, this.selection.end);
+            const clickInSelection = hasSelection && this.initialClickTime >= selectionStart && this.initialClickTime <= selectionEnd;
+            
             this.seekToTime(this.initialClickTime);
             this.seekPosition = this.initialClickTime;
-            this.selection.start = 0;
-            this.selection.end = 0;
-            this.selectionDiv.style.display = 'none';
             
-            // Hide resize handles and clear timeout
-            this.hideResizeHandles();
-            if (this.resizeHandleTimeout) {
-                clearTimeout(this.resizeHandleTimeout);
-                this.resizeHandleTimeout = null;
+            // Clear selection if clicking outside existing selection
+            if (!clickInSelection) {
+                this.selection.start = 0;
+                this.selection.end = 0;
+                this.selectionDiv.style.display = 'none';
+                
+                // Hide resize handles and clear timeout when clearing selection
+                this.hideResizeHandles();
+                if (this.resizeHandleTimeout) {
+                    clearTimeout(this.resizeHandleTimeout);
+                    this.resizeHandleTimeout = null;
+                }
             }
+            
+            // Redraw waveform
+            this.waveformRenderer.drawWaveform(this.audioBuffer, this.seekPosition, this.audioPlayer.getCurrentPlaybackTime(), this.selection);
             
             this.updateSelectionInfo();
             this.updateSelectionDuration();
