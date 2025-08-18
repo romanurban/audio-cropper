@@ -104,7 +104,7 @@ input[type="file"] {
 }
 
 .waveform {
-    height: 200px;
+    height: 300px;
     background: #444;
     border-radius: 4px;
     position: relative;
@@ -370,6 +370,37 @@ input[type="file"] {
     box-shadow: 
         0 0 6px rgba(76, 175, 80, 0.3),
         inset 0 1px 2px rgba(76, 175, 80, 0.3);
+}
+
+/* Custom hover labels */
+.control-buttons .btn {
+    position: relative;
+}
+
+.control-buttons .btn::after {
+    content: attr(data-hover-text);
+    position: absolute;
+    bottom: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.9);
+    color: #4CAF50;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 500;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    z-index: 1000;
+    border: 1px solid rgba(76, 175, 80, 0.3);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.control-buttons .btn:hover:not(:disabled)::after {
+    opacity: 1;
 }
 
 .play-progress-position {
