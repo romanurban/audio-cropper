@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a client-side audio cropping tool that runs entirely in the browser using vanilla JavaScript and the Web Audio API. The application allows users to upload audio files, visualize them as waveforms, select regions, split audio into chunks, and export trimmed segments as WAV files.
+This is a client-side audio cropping tool that runs entirely in the browser using vanilla JavaScript and the Web Audio API. The application allows users to upload audio files, visualize them as waveforms, select regions, split audio into chunks, apply audio effects (fade in/out, silence, normalize), and export trimmed segments as WAV files.
 
 ## Architecture
 
@@ -35,28 +35,33 @@ This is a client-side audio cropping tool that runs entirely in the browser usin
 
 **js/utils.js** - AudioUtils class
 - Utility functions for time formatting and WAV conversion
+- Audio processing effects (normalize with RMS-based algorithm)
 - File download helpers
 
 **js/main.js** - Application entry point
 - Initializes the AudioChunkingEditor when DOM is ready
+- Exposes global functions for HTML onclick handlers (sample file loading)
 
 **Key Features:**
-- Drag & drop file upload with visual feedback
+- Drag & drop file upload with visual feedback and sample file loading
 - Waveform visualization using HTML5 Canvas
 - Audio chunking system that allows splitting at any position
 - Region selection for cropping specific segments
-- Playback controls with seek functionality
+- Audio effects: fade in/out, silence, and RMS-based normalize to target dB level
+- Playback controls with seek functionality and loop mode
 - WAV export using manual buffer-to-WAV conversion
 - Visual chunk overlays and selection indicators
+- Resizable selection handles for precise region adjustment
 
 ### Audio Processing Pipeline
 
-1. **File Loading**: Uses FileReader API to convert uploaded files to ArrayBuffer
+1. **File Loading**: Uses FileReader API or fetch for sample files to convert to ArrayBuffer
 2. **Audio Decoding**: Web Audio API's `decodeAudioData()` processes the buffer
 3. **Waveform Generation**: Samples audio data into 1000 points for visualization
 4. **Canvas Rendering**: Draws waveform with proportional chunk representation
-5. **Playback**: Creates buffer sources for real-time audio playback
-6. **Export**: Manual WAV encoding with proper headers and PCM data
+5. **Audio Effects**: Real-time processing (fade, silence, RMS-based normalize)
+6. **Playback**: Creates buffer sources for real-time audio playback
+7. **Export**: Manual WAV encoding with proper headers and PCM data
 
 ### State Management
 
@@ -80,8 +85,9 @@ python -m http.server 8000  # Then visit http://localhost:8000
 
 ### Testing
 - No automated test suite exists
-- Test manually by uploading various audio formats (WAV, MP3, OGG)
-- Verify waveform rendering, playback, chunk operations, and export functionality
+- Test manually by uploading various audio formats (WAV, MP3, OGG) or using the sample file
+- Verify waveform rendering, playback, chunk operations, audio effects, and export functionality
+- Sample file available: `samples/stereo-test.mp3` for quick testing
 
 ### Key Technical Constraints
 - Requires modern browser with Web Audio API and ES6 module support
@@ -97,7 +103,8 @@ python -m http.server 8000  # Then visit http://localhost:8000
 **AudioChunkingEditor (audio-cropper.js)**
 - Main controller coordinating all components
 - Event handling and user interactions
-- File upload and audio buffer management
+- File upload, sample file loading, and audio buffer management
+- Audio effects processing (fade in/out, silence, normalize)
 - UI state management and updates
 
 **WaveformRenderer (waveform-renderer.js)**
@@ -119,8 +126,9 @@ python -m http.server 8000  # Then visit http://localhost:8000
 - Playback timing and position tracking
 
 **AudioUtils (utils.js)**
-- Time formatting utilities
-- WAV file format conversion
+- Time formatting utilities (standard and millisecond precision)
+- WAV file format conversion with proper headers
+- Audio normalization with RMS analysis and target dB level
 - File download helpers
 - Shared utility functions
 
@@ -147,6 +155,8 @@ audio-cropper/
 │   ├── chunk-manager.js     # Chunk management
 │   ├── audio-player.js      # Audio playback
 │   └── utils.js        # Utility functions
+├── samples/
+│   └── stereo-test.mp3 # Sample audio file for testing
 ├── CLAUDE.md           # This documentation
 └── README.md           # Project description
 ```
@@ -159,4 +169,45 @@ audio-cropper/
 - Each class has a single, well-defined purpose
 - Shared utilities are centralized in utils.js
 - Main application coordinates all components through dependency injection
+
+## Audio Effects Implementation
+
+### Normalize Effect
+- Uses RMS (Root Mean Square) analysis for professional audio normalization
+- Default target level: -3dB (configurable)
+- Analyzes both RMS and peak levels to prevent clipping
+- Applies safety limits (max 20dB gain) to prevent extreme amplification
+- Works on selected regions or chunks, boosting quiet sections to consistent levels
+
+### Fade Effects
+- Smooth cosine interpolation curves for natural-sounding fades
+- Applies to selection regions or selected chunks
+- Fade in: 0% to 100% volume over the selected duration
+- Fade out: 100% to 0% volume over the selected duration
+
+### Silence Effect
+- Complete audio muting for selected regions or chunks
+- Preserves audio buffer structure while setting samples to zero
+- Useful for removing unwanted sections or creating gaps
+
+## User Interface Features
+
+### File Loading
+- Drag & drop support with visual feedback
+- File browser with audio format filtering
+- Sample file loading via "load sample file" link
+- Supports WAV, MP3, OGG formats
+
+### Selection System
+- Click-and-drag region selection with visual feedback
+- Resizable selection handles for precise adjustment
+- Chunk-based selection for pre-split audio segments
+- Clear selection functionality
+
+### Audio Controls
+- Play/pause with single button interface
+- Stop and loop mode toggles
+- Seek by clicking on waveform
+- Split functionality at current position
+- Export selected regions or entire audio as WAV
 

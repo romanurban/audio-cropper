@@ -1,22 +1,29 @@
-# Micro Audio Cropper
+# Audio Cropper (Browser)
 
-A lightweight client-side tool that lets you trim audio directly in the browser. It uses vanilla JavaScript and the Web Audio API to display a waveform, allow selection, and export the chosen segment as a WAV file—no server interaction required.
+A minimal, client‑side audio editor that runs entirely in the browser. It lets you load a file, visualize the waveform, select or split regions into chunks, apply simple effects, and export WAV—no server required.
 
-## Usage
+## Quick Start
 
-1. Open `index.html` in a modern browser.
-2. Drag & drop a WAV, MP3 or OGG file onto the page (or click **Choose Audio File**).
-3. Drag on the waveform to select a portion of the audio.
-4. Use the playback controls to preview your selection.
-5. Click **Crop Selection** to download the trimmed audio.
+- Serve the folder over HTTP (ES modules require it):
+  - `python -m http.server 8000` then open `http://localhost:8000`
+- Drag & drop an audio file (WAV/MP3/OGG) or use the picker.
+- Select a region, split into chunks, preview playback, and export.
 
-All processing happens locally; your audio never leaves your device.
+## Features
 
-## Built With
+- Waveform visualization with Canvas
+- Region selection and chunk splitting
+- Playback controls with seek and loop
+- Simple effects: fade in/out, silence, normalize
+- Export selection, chunk, or full audio as 16‑bit WAV
+- All processing local to your device
 
-* [Web Audio API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
-* Vanilla JavaScript
+## Tech
 
-## License
+- Vanilla JavaScript + ES modules
+- Web Audio API and HTML5 Canvas
+- No build tools or external dependencies
 
-No license file is included.
+## Notes
+
+- Use a modern browser; open via HTTP/HTTPS (not `file://`).
