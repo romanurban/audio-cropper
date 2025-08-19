@@ -725,6 +725,153 @@ export class AudioChunkingEditor {
                 }
                 event.preventDefault(); // Prevent page scroll
                 break;
+                
+            case 'Escape':
+                // Escape: Stop playback and clear selection
+                this.stop();
+                this.clearSelection();
+                event.preventDefault();
+                break;
+                
+            case 'KeyS':
+                if (event.metaKey || event.ctrlKey) {
+                    // Cmd/Ctrl+S: Split at current position
+                    this.splitAtPosition();
+                    event.preventDefault();
+                }
+                break;
+                
+            case 'KeyL':
+                if (event.metaKey || event.ctrlKey) {
+                    // Cmd/Ctrl+L: Toggle loop
+                    this.toggleLoop();
+                    event.preventDefault();
+                }
+                break;
+                
+            case 'Delete':
+            case 'Backspace':
+                // Delete/Backspace: Delete selection or selected chunk
+                if (this.selection.start !== this.selection.end || this.chunkManager.selectedChunk) {
+                    this.delete();
+                    event.preventDefault();
+                }
+                break;
+                
+            case 'KeyA':
+                if (event.metaKey || event.ctrlKey) {
+                    // Cmd/Ctrl+A: Select all audio
+                    this.selectAll();
+                    event.preventDefault();
+                }
+                break;
+                
+            case 'KeyE':
+                if (event.metaKey || event.ctrlKey) {
+                    // Cmd/Ctrl+E: Export/Crop selection
+                    this.cropAudio();
+                    event.preventDefault();
+                }
+                break;
+                
+            case 'ArrowLeft':
+                // Left arrow: Seek backward
+                if (event.shiftKey) {
+                    this.seekRelative(-5); // 5 seconds
+                } else {
+                    this.seekRelative(-1); // 1 second
+                }
+                event.preventDefault();
+                break;
+                
+            case 'ArrowRight':
+                // Right arrow: Seek forward
+                if (event.shiftKey) {
+                    this.seekRelative(5); // 5 seconds
+                } else {
+                    this.seekRelative(1); // 1 second
+                }
+                event.preventDefault();
+                break;
+                
+            case 'Home':
+                // Home: Go to beginning
+                this.seekToTime(0);
+                event.preventDefault();
+                break;
+                
+            case 'End':
+                // End: Go to end
+                if (this.audioBuffer) {
+                    this.seekToTime(this.audioBuffer.duration);
+                }
+                event.preventDefault();
+                break;
+                
+            case 'KeyF':
+                if (event.metaKey || event.ctrlKey) {
+                    if (event.shiftKey) {
+                        // Cmd/Ctrl+Shift+F: Fade out
+                        this.applyFadeOut();
+                    } else {
+                        // Cmd/Ctrl+F: Fade in
+                        this.applyFadeIn();
+                    }
+                    event.preventDefault();
+                }
+                break;
+                
+            case 'KeyN':
+                if (event.metaKey || event.ctrlKey) {
+                    // Cmd/Ctrl+N: Normalize
+                    this.applyNormalize();
+                    event.preventDefault();
+                }
+                break;
+                
+            case 'KeyM':
+                if (event.metaKey || event.ctrlKey) {
+                    // Cmd/Ctrl+M: Apply silence (mute)
+                    this.applySilence();
+                    event.preventDefault();
+                }
+                break;
+                
+            case 'Digit1':
+            case 'Digit2':
+            case 'Digit3':
+            case 'Digit4':
+            case 'Digit5':
+            case 'Digit6':
+            case 'Digit7':
+            case 'Digit8':
+            case 'Digit9':
+                // Number keys 1-9: Jump to 10%-90% of audio
+                if (!event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey) {
+                    const percentage = parseInt(event.code.slice(-1)) / 10;
+                    const targetTime = this.audioBuffer.duration * percentage;
+                    this.seekToTime(targetTime);
+                    event.preventDefault();
+                }
+                break;
+                
+            case 'Digit0':
+                // 0: Jump to beginning
+                if (!event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey) {
+                    this.seekToTime(0);
+                    event.preventDefault();
+                }
+                break;
+                
+            case 'KeyH':
+            case 'Slash':
+                // H or ?: Show keyboard shortcuts help
+                if ((event.code === 'KeyH' && !event.shiftKey) || 
+                    (event.code === 'Slash' && event.shiftKey)) {
+                    this.showKeyboardShortcuts();
+                    event.preventDefault();
+                }
+                break;
         }
     }
 
@@ -930,6 +1077,80 @@ export class AudioChunkingEditor {
             // No selection - just toggle play/pause
             this.togglePlayPause();
         }
+    }
+
+    selectAll() {
+        if (!this.audioBuffer) return;
+        
+        // Select entire audio duration
+        this.selection.start = 0;
+        this.selection.end = this.audioBuffer.duration;
+        this.seekPosition = 0;
+        this.audioPlayer.pausedAtTime = 0;
+        
+        // Clear chunk selection
+        this.chunkManager.selectedChunk = null;
+        this.chunkManager.updateChunkOverlays();
+        
+        // Update UI
+        this.updateSelectionDisplay();
+        this.updateSelectionInfo();
+        this.updateSelectionDuration();
+        this.updateSelectionClock();
+        this.updateDeleteButton();
+        this.updateFadeButtons();
+        this.updateNormalizeButton();
+        this.updateSilenceButton();
+        
+        // Schedule resize handles
+        this.scheduleResizeHandles();
+        
+        // Redraw waveform
+        this.waveformRenderer.drawWaveform(this.audioBuffer, this.seekPosition, this.audioPlayer.getCurrentPlaybackTime(), this.selection);
+    }
+
+    async seekRelative(deltaSeconds) {
+        if (!this.audioBuffer) return;
+        
+        const currentTime = this.seekPosition;
+        const newTime = Math.max(0, Math.min(currentTime + deltaSeconds, this.audioBuffer.duration));
+        await this.seekToTime(newTime);
+    }
+
+    showKeyboardShortcuts() {
+        const shortcuts = `
+🎵 Audio Editor - Keyboard Shortcuts
+
+PLAYBACK:
+• Space - Toggle play/pause
+• Shift+Space - Play from selection start
+• Escape - Stop and clear selection
+• Ctrl/Cmd+L - Toggle loop mode
+
+NAVIGATION:
+• ← → - Seek 1 second backward/forward
+• Shift+← → - Seek 5 seconds backward/forward
+• Home - Go to beginning
+• End - Go to end
+• 0-9 - Jump to 0%-90% of audio
+
+EDITING:
+• Ctrl/Cmd+A - Select all audio
+• Ctrl/Cmd+S - Split at current position
+• Delete/Backspace - Delete selection or chunk
+• Ctrl/Cmd+E - Export/crop selection
+
+EFFECTS:
+• Ctrl/Cmd+F - Apply fade in
+• Ctrl/Cmd+Shift+F - Apply fade out
+• Ctrl/Cmd+N - Normalize audio
+• Ctrl/Cmd+M - Apply silence (mute)
+
+HELP:
+• H or ? - Show this help
+        `;
+        
+        alert(shortcuts);
     }
 
     toggleLoop() {
