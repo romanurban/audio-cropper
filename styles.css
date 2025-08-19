@@ -116,6 +116,166 @@ input[type="file"] {
     display: none;
 }
 
+/* Export Popup Styles */
+.export-popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+.export-popup {
+    background: #2d2d2d;
+    border-radius: 12px;
+    width: 400px;
+    max-width: 90vw;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    border: 2px solid #4CAF50;
+    animation: popup-in 0.3s ease-out;
+}
+
+@keyframes popup-in {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.export-popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid #444;
+}
+
+.export-popup-header h3 {
+    margin: 0;
+    color: #4CAF50;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.export-popup-close {
+    background: none;
+    border: none;
+    color: #aaa;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.export-popup-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.export-popup-content {
+    padding: 24px;
+}
+
+.section-label {
+    display: block;
+    color: #4CAF50;
+    font-weight: 600;
+    margin-bottom: 12px;
+    font-size: 14px;
+}
+
+.format-section, .bitrate-section {
+    margin-bottom: 24px;
+}
+
+.format-options, .bitrate-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.format-option, .bitrate-option {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    background: #333;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+}
+
+.format-option:hover, .bitrate-option:hover {
+    background: #3a3a3a;
+    border-color: #4CAF50;
+}
+
+.format-option input[type="radio"], .bitrate-option input[type="radio"] {
+    margin-right: 12px;
+    accent-color: #4CAF50;
+}
+
+.format-option input[type="radio"]:checked ~ .format-label,
+.bitrate-option input[type="radio"]:checked ~ .bitrate-label {
+    color: #fff;
+}
+
+.format-option input[type="radio"]:checked,
+.bitrate-option input[type="radio"]:checked {
+    background: rgba(76, 175, 80, 0.15);
+}
+
+/* Selected option styling - fallback for browsers without :has() support */
+.format-option.selected, .bitrate-option.selected {
+    background: rgba(76, 175, 80, 0.15);
+    border-color: #4CAF50;
+}
+
+.format-label, .bitrate-label {
+    display: flex;
+    flex-direction: column;
+    color: #ccc;
+    transition: color 0.2s ease;
+}
+
+.format-label strong, .bitrate-label strong {
+    font-size: 14px;
+    margin-bottom: 2px;
+}
+
+.format-label small, .bitrate-label small {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.export-popup-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px 20px;
+    border-top: 1px solid #444;
+}
+
+.export-popup-footer .btn {
+    min-width: 80px;
+}
+
 .waveform-container {
     margin: 20px 0;
     background: #333;

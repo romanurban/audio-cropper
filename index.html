@@ -40,7 +40,7 @@
                             <button class="btn btn-secondary" id="stopBtn" disabled title="Stop" data-hover-text="stop">◼</button>
                             <button class="btn btn-secondary" id="loopBtn" disabled title="Toggle Loop" data-hover-text="loop">↻</button>
                             <button class="btn btn-warning" id="splitBtn" disabled title="Split at Position" data-hover-text="split">][</button>
-                            <button class="btn btn-primary" id="cropBtn" disabled title="Crop and Download Selection" data-hover-text="crop">⬇</button>
+                            <button class="btn btn-primary" id="cropBtn" disabled title="Export Audio" data-hover-text="export">⬇</button>
                             <button class="btn btn-info" id="fadeInBtn" disabled title="Apply Fade In" data-hover-text="fade-in">↗</button>
                             <button class="btn btn-info" id="fadeOutBtn" disabled title="Apply Fade Out" data-hover-text="fade-out">↘</button>
                             <button class="btn btn-info" id="normalizeBtn" disabled title="Normalize Audio" data-hover-text="normalize">≈</button>
@@ -82,6 +82,75 @@
             
             <div class="progress" id="progress">
                 <div class="progress-bar" id="progressBar"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Options Popup -->
+    <div class="export-popup-overlay" id="exportPopupOverlay" style="display: none;">
+        <div class="export-popup">
+            <div class="export-popup-header">
+                <h3>Export Audio</h3>
+                <button class="export-popup-close" id="exportPopupClose">×</button>
+            </div>
+            <div class="export-popup-content">
+                <div class="format-section">
+                    <label class="section-label">Format:</label>
+                    <div class="format-options">
+                        <label class="format-option">
+                            <input type="radio" name="format" value="wav" checked>
+                            <span class="format-label">
+                                <strong>WAV</strong>
+                                <small>Uncompressed, highest quality</small>
+                            </span>
+                        </label>
+                        <label class="format-option">
+                            <input type="radio" name="format" value="mp3">
+                            <span class="format-label">
+                                <strong>MP3</strong>
+                                <small>Compressed, smaller file size</small>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="bitrate-section" id="bitrateSection" style="display: none;">
+                    <label class="section-label">MP3 Quality:</label>
+                    <div class="bitrate-options">
+                        <label class="bitrate-option">
+                            <input type="radio" name="bitrate" value="128">
+                            <span class="bitrate-label">
+                                <strong>128 kbps</strong>
+                                <small>Good for speech, smaller files</small>
+                            </span>
+                        </label>
+                        <label class="bitrate-option">
+                            <input type="radio" name="bitrate" value="192" checked>
+                            <span class="bitrate-label">
+                                <strong>192 kbps</strong>
+                                <small>Balanced quality and size</small>
+                            </span>
+                        </label>
+                        <label class="bitrate-option">
+                            <input type="radio" name="bitrate" value="256">
+                            <span class="bitrate-label">
+                                <strong>256 kbps</strong>
+                                <small>High quality music</small>
+                            </span>
+                        </label>
+                        <label class="bitrate-option">
+                            <input type="radio" name="bitrate" value="320">
+                            <span class="bitrate-label">
+                                <strong>320 kbps</strong>
+                                <small>Maximum quality</small>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="export-popup-footer">
+                <button class="btn btn-secondary" id="exportCancel">Cancel</button>
+                <button class="btn btn-primary" id="exportConfirm">Export</button>
             </div>
         </div>
     </div>

@@ -56,6 +56,13 @@ export class AudioChunkingEditor {
         this.silenceBtn = document.getElementById('silenceBtn');
         this.deleteBtn = document.getElementById('deleteBtn');
         
+        // Export popup elements
+        this.exportPopupOverlay = document.getElementById('exportPopupOverlay');
+        this.exportPopupClose = document.getElementById('exportPopupClose');
+        this.exportCancel = document.getElementById('exportCancel');
+        this.exportConfirm = document.getElementById('exportConfirm');
+        this.bitrateSection = document.getElementById('bitrateSection');
+        
         // Info displays
         this.durationSpan = document.getElementById('duration');
         this.currentTimeSpan = document.getElementById('currentTime');
@@ -121,13 +128,37 @@ export class AudioChunkingEditor {
         this.stopBtn.addEventListener('click', () => this.stop());
         this.loopBtn.addEventListener('click', () => this.toggleLoop());
         this.splitBtn.addEventListener('click', () => this.splitAtPosition());
-        this.cropBtn.addEventListener('click', () => this.cropAudio());
+        this.cropBtn.addEventListener('click', () => this.showExportPopup());
         this.fadeInBtn.addEventListener('click', () => this.applyFadeIn());
         this.fadeOutBtn.addEventListener('click', () => this.applyFadeOut());
         this.normalizeBtn.addEventListener('click', () => this.applyNormalize());
         this.silenceBtn.addEventListener('click', () => this.applySilence());
         this.deleteBtn.addEventListener('click', () => this.delete());
         this.clearSelectionBtn.addEventListener('click', () => this.clearSelection());
+        
+        // Export popup event listeners
+        this.exportPopupClose.addEventListener('click', () => this.hideExportPopup());
+        this.exportCancel.addEventListener('click', () => this.hideExportPopup());
+        this.exportConfirm.addEventListener('click', () => this.handleExportConfirm());
+        this.exportPopupOverlay.addEventListener('click', (e) => {
+            if (e.target === this.exportPopupOverlay) {
+                this.hideExportPopup();
+            }
+        });
+        
+        // Format radio button change listener
+        document.addEventListener('change', (e) => {
+            if (e.target.name === 'format') {
+                this.onFormatChange(e.target.value);
+                this.updateSelectedStyles('format');
+            } else if (e.target.name === 'bitrate') {
+                this.updateSelectedStyles('bitrate');
+            }
+        });
+        
+        // Initialize MP3 worker
+        this.mp3Worker = null;
+        this.mp3WorkerReady = false;
         
         // Resize
         window.addEventListener('resize', () => this.waveformRenderer.resizeCanvas());
@@ -1117,6 +1148,177 @@ export class AudioChunkingEditor {
         await this.seekToTime(newTime);
     }
 
+    showExportPopup() {
+        this.exportPopupOverlay.style.display = 'flex';
+        // Reset to WAV format by default
+        document.querySelector('input[name="format"][value="wav"]').checked = true;
+        this.onFormatChange('wav');
+        
+        // Update selected styles
+        this.updateSelectedStyles('format');
+        this.updateSelectedStyles('bitrate');
+        
+        // Focus the first radio button for accessibility
+        setTimeout(() => {
+            document.querySelector('input[name="format"][value="wav"]').focus();
+        }, 100);
+        
+        // Add escape key listener
+        this.popupKeyHandler = (e) => {
+            if (e.key === 'Escape') {
+                this.hideExportPopup();
+            }
+        };
+        document.addEventListener('keydown', this.popupKeyHandler);
+    }
+
+    hideExportPopup() {
+        this.exportPopupOverlay.style.display = 'none';
+        
+        // Remove escape key listener
+        if (this.popupKeyHandler) {
+            document.removeEventListener('keydown', this.popupKeyHandler);
+            this.popupKeyHandler = null;
+        }
+    }
+
+    onFormatChange(format) {
+        if (format === 'mp3') {
+            this.bitrateSection.style.display = 'block';
+            this.initMp3Worker();
+        } else {
+            this.bitrateSection.style.display = 'none';
+        }
+    }
+
+    updateSelectedStyles(inputName) {
+        // Remove selected class from all options of this type
+        const optionClass = inputName === 'format' ? 'format-option' : 'bitrate-option';
+        document.querySelectorAll(`.${optionClass}`).forEach(option => {
+            option.classList.remove('selected');
+        });
+        
+        // Add selected class to the checked option
+        const checkedInput = document.querySelector(`input[name="${inputName}"]:checked`);
+        if (checkedInput) {
+            checkedInput.closest(`.${optionClass}`).classList.add('selected');
+        }
+    }
+
+    async handleExportConfirm() {
+        const format = document.querySelector('input[name="format"]:checked').value;
+        let bitrate = 192; // default
+        
+        if (format === 'mp3') {
+            const bitrateInput = document.querySelector('input[name="bitrate"]:checked');
+            if (bitrateInput) {
+                bitrate = parseInt(bitrateInput.value);
+            } else {
+                // No bitrate selected, show error
+                alert('Please select an MP3 quality setting.');
+                return;
+            }
+        }
+        
+        // Disable export button to prevent double-clicking
+        this.exportConfirm.disabled = true;
+        this.exportConfirm.textContent = 'Exporting...';
+        
+        try {
+            this.hideExportPopup();
+            await this.exportAudio(format, bitrate);
+        } catch (error) {
+            console.error('Export failed:', error);
+        } finally {
+            // Re-enable export button
+            this.exportConfirm.disabled = false;
+            this.exportConfirm.textContent = 'Export';
+        }
+    }
+
+    async initMp3Worker() {
+        if (this.mp3Worker || this.mp3WorkerReady) return;
+
+        try {
+            this.mp3Worker = new Worker('js/workers/mp3-encoder-worker.js');
+            
+            // Set up worker message handling
+            this.mp3Worker.onmessage = (e) => this.handleMp3WorkerMessage(e);
+            this.mp3Worker.onerror = (error) => {
+                console.error('MP3 Worker error:', error);
+                this.mp3WorkerReady = false;
+            };
+
+            // Initialize the worker
+            await this.sendMp3WorkerMessage('init');
+            this.mp3WorkerReady = true;
+            console.log('MP3 encoder worker initialized');
+            
+        } catch (error) {
+            console.error('Failed to initialize MP3 worker:', error);
+            this.mp3Worker = null;
+            this.mp3WorkerReady = false;
+        }
+    }
+
+    sendMp3WorkerMessage(type, data = {}) {
+        return new Promise((resolve, reject) => {
+            if (!this.mp3Worker) {
+                reject(new Error('MP3 worker not initialized'));
+                return;
+            }
+
+            const id = Math.random().toString(36).substr(2, 9);
+            
+            const timeout = setTimeout(() => {
+                reject(new Error('MP3 worker timeout'));
+            }, 30000); // 30 second timeout
+
+            const handleResponse = (e) => {
+                if (e.data.id === id) {
+                    clearTimeout(timeout);
+                    this.mp3Worker.removeEventListener('message', handleResponse);
+                    
+                    if (e.data.success) {
+                        resolve(e.data);
+                    } else {
+                        reject(new Error(e.data.error || 'MP3 encoding failed'));
+                    }
+                }
+            };
+
+            this.mp3Worker.addEventListener('message', handleResponse);
+            this.mp3Worker.postMessage({ type, id, ...data });
+        });
+    }
+
+    handleMp3WorkerMessage(e) {
+        const { type } = e.data;
+        
+        switch (type) {
+            case 'progress':
+                this.updateEncodingProgress(e.data.progress);
+                break;
+            case 'error':
+                console.error('MP3 encoding error:', e.data.error);
+                this.hideEncodingProgress();
+                break;
+        }
+    }
+
+    updateEncodingProgress(progress) {
+        // Update progress display (we'll implement this next)
+        if (this.progressBar) {
+            this.progressBar.style.width = progress + '%';
+        }
+    }
+
+    hideEncodingProgress() {
+        if (this.progress) {
+            this.progress.style.display = 'none';
+        }
+    }
+
     showKeyboardShortcuts() {
         const shortcuts = `
 🎵 Audio Editor - Keyboard Shortcuts
@@ -1138,7 +1340,7 @@ EDITING:
 • Ctrl/Cmd+A - Select all audio
 • Ctrl/Cmd+S - Split at current position
 • Delete/Backspace - Delete selection or chunk
-• Ctrl/Cmd+E - Export/crop selection
+• Ctrl/Cmd+E - Export selection (WAV/MP3)
 
 EFFECTS:
 • Ctrl/Cmd+F - Apply fade in
@@ -1213,7 +1415,7 @@ HELP:
         requestAnimationFrame(() => this.animateProgress());
     }
 
-    async cropAudio() {
+    async exportAudio(format = 'wav', bitrate = 192) {
         let start, end;
         
         // Determine what to crop: region selection or selected chunk
@@ -1232,9 +1434,12 @@ HELP:
             end = this.audioBuffer.duration;
         }
         
+        // Format and bitrate are now passed as parameters
+        
         try {
-            
             this.cropBtn.disabled = true;
+            this.progress.style.display = 'block';
+            this.updateProgress(0);
             
             const sampleRate = this.audioBuffer.sampleRate;
             const channels = this.audioBuffer.numberOfChannels;
@@ -1242,37 +1447,88 @@ HELP:
             const endFrame = Math.floor(end * sampleRate);
             const frameCount = endFrame - startFrame;
             
-            const newBuffer = this.audioContext.createBuffer(channels, frameCount, sampleRate);
-            
+            // Extract audio data for the selected region
+            const audioChannels = [];
             for (let channel = 0; channel < channels; channel++) {
-                const oldData = this.audioBuffer.getChannelData(channel);
-                const newData = newBuffer.getChannelData(channel);
+                const channelData = new Float32Array(frameCount);
+                const sourceData = this.audioBuffer.getChannelData(channel);
                 
                 for (let i = 0; i < frameCount; i++) {
-                    newData[i] = oldData[startFrame + i] || 0;
+                    channelData[i] = sourceData[startFrame + i] || 0;
+                }
+                audioChannels.push(channelData);
+            }
+            
+            let blob, filename, mimeType;
+            
+            if (format === 'mp3') {
+                // MP3 Export
+                this.updateProgress(25);
+                
+                if (!this.mp3WorkerReady) {
+                    await this.initMp3Worker();
+                }
+                
+                // Use the passed bitrate parameter
+                const result = await this.sendMp3WorkerMessage('encode', {
+                    channels: audioChannels,
+                    sampleRate,
+                    bitrate
+                });
+                
+                this.updateProgress(90);
+                
+                blob = new Blob([result.data], { type: 'audio/mpeg' });
+                mimeType = 'audio/mpeg';
+                
+                // Generate filename
+                if (hasRegionSelection || hasChunkSelection) {
+                    filename = `cropped_audio_${start.toFixed(1)}s-${end.toFixed(1)}s_${bitrate}kbps.mp3`;
+                } else {
+                    filename = `audio_export_${new Date().getTime()}_${bitrate}kbps.mp3`;
+                }
+                
+            } else {
+                // WAV Export (existing logic)
+                this.updateProgress(50);
+                
+                const newBuffer = this.audioContext.createBuffer(channels, frameCount, sampleRate);
+                
+                for (let channel = 0; channel < channels; channel++) {
+                    const newData = newBuffer.getChannelData(channel);
+                    newData.set(audioChannels[channel]);
+                }
+                
+                this.updateProgress(75);
+                
+                const wavArrayBuffer = AudioUtils.audioBufferToWav(newBuffer);
+                blob = new Blob([wavArrayBuffer], { type: 'audio/wav' });
+                mimeType = 'audio/wav';
+                
+                // Generate filename
+                if (hasRegionSelection || hasChunkSelection) {
+                    filename = `cropped_audio_${start.toFixed(1)}s-${end.toFixed(1)}s.wav`;
+                } else {
+                    filename = `audio_export_${new Date().getTime()}.wav`;
                 }
             }
             
-            const wavArrayBuffer = AudioUtils.audioBufferToWav(newBuffer);
-            const blob = new Blob([wavArrayBuffer], { type: 'audio/wav' });
-            
-            // Generate appropriate filename based on whether anything was selected
-            let filename;
-            if (hasRegionSelection || hasChunkSelection) {
-                filename = `cropped_audio_${start.toFixed(1)}s-${end.toFixed(1)}s.wav`;
-            } else {
-                filename = `audio_export_${new Date().getTime()}.wav`;
-            }
+            this.updateProgress(100);
             
             AudioUtils.downloadBlob(blob, filename);
             
-            this.cropBtn.disabled = false;
+            console.log(`Exported ${format.toUpperCase()} audio: ${start.toFixed(2)}s to ${end.toFixed(2)}s`);
             
-            console.log(`Cropped audio: ${start.toFixed(2)}s to ${end.toFixed(2)}s`);
+            // Hide progress after a short delay
+            setTimeout(() => {
+                this.progress.style.display = 'none';
+                this.cropBtn.disabled = false;
+            }, 500);
             
         } catch (error) {
-            console.error('Error cropping audio:', error);
-            alert('Error cropping audio. Please try again.');
+            console.error('Error exporting audio:', error);
+            alert(`Error exporting ${format.toUpperCase()} audio. Please try again.`);
+            this.progress.style.display = 'none';
             this.cropBtn.disabled = false;
         }
     }
@@ -1693,6 +1949,21 @@ HELP:
         // Redraw waveform to clear selection
         if (this.audioBuffer) {
             this.waveformRenderer.drawWaveform(this.audioBuffer, this.seekPosition, this.audioPlayer.getCurrentPlaybackTime());
+        }
+    }
+
+    // Cleanup method for when the editor is destroyed
+    destroy() {
+        if (this.mp3Worker) {
+            this.mp3Worker.terminate();
+            this.mp3Worker = null;
+            this.mp3WorkerReady = false;
+        }
+        
+        // Clean up popup key handler
+        if (this.popupKeyHandler) {
+            document.removeEventListener('keydown', this.popupKeyHandler);
+            this.popupKeyHandler = null;
         }
     }
 }

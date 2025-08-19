@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a client-side audio cropping tool that runs entirely in the browser using vanilla JavaScript and the Web Audio API. The application allows users to upload audio files, visualize them as waveforms, select regions, split audio into chunks, apply audio effects (fade in/out, silence, normalize), and export trimmed segments as WAV files.
+This is a client-side audio cropping tool that runs entirely in the browser using vanilla JavaScript and the Web Audio API. The application allows users to upload audio files, visualize them as waveforms, select regions, split audio into chunks, apply audio effects (fade in/out, silence, normalize), and export trimmed segments as WAV or MP3 files.
 
 ## Architecture
 
@@ -49,9 +49,11 @@ This is a client-side audio cropping tool that runs entirely in the browser usin
 - Region selection for cropping specific segments
 - Audio effects: fade in/out, silence, and RMS-based normalize to target dB level
 - Playback controls with seek functionality and loop mode
-- WAV export using manual buffer-to-WAV conversion
+- Multi-format export: WAV (uncompressed) and MP3 (128/192/256/320 kbps)
+- Web Worker-based MP3 encoding to prevent UI blocking
 - Visual chunk overlays and selection indicators
 - Resizable selection handles for precise region adjustment
+- Comprehensive keyboard shortcuts for efficient editing
 
 ### Audio Processing Pipeline
 
@@ -61,7 +63,7 @@ This is a client-side audio cropping tool that runs entirely in the browser usin
 4. **Canvas Rendering**: Draws waveform with proportional chunk representation
 5. **Audio Effects**: Real-time processing (fade, silence, RMS-based normalize)
 6. **Playback**: Creates buffer sources for real-time audio playback
-7. **Export**: Manual WAV encoding with proper headers and PCM data
+7. **Export**: WAV encoding with proper headers and PCM data, or MP3 encoding via Web Worker
 
 ### State Management
 
@@ -154,7 +156,11 @@ audio-cropper/
 │   ├── waveform-renderer.js # Canvas visualization
 │   ├── chunk-manager.js     # Chunk management
 │   ├── audio-player.js      # Audio playback
-│   └── utils.js        # Utility functions
+│   ├── utils.js        # Utility functions
+│   ├── encoders/
+│   │   └── mp3.js      # MP3 encoder wrapper
+│   └── workers/
+│       └── mp3-encoder-worker.js # MP3 encoding Web Worker
 ├── samples/
 │   └── stereo-test.mp3 # Sample audio file for testing
 ├── CLAUDE.md           # This documentation
@@ -209,4 +215,34 @@ audio-cropper/
 - Stop and loop mode toggles
 - Seek by clicking on waveform
 - Split functionality at current position
-- Export selected regions or entire audio as WAV
+- Multi-format export: WAV (uncompressed) or MP3 (compressed)
+- MP3 quality selection: 128, 192, 256, or 320 kbps
+- Progress indicator during export operations
+
+## MP3 Export Implementation
+
+### Architecture
+- **lamejs Library**: Uses lamejs (JavaScript port of LAME) for MP3 encoding
+- **Web Worker**: MP3 encoding runs in a separate thread to prevent UI blocking
+- **Progressive Encoding**: Processes audio in chunks with progress reporting
+- **Memory Efficient**: Streams encoded data to avoid large peak memory usage
+
+### Technical Details
+- **Input Format**: Float32Array per channel (native Web Audio format)
+- **Chunked Processing**: 1152-sample frames (LAME standard frame size)
+- **Bitrate Support**: 128, 192, 256, 320 kbps (constant bitrate)
+- **Sample Rate**: Preserves original sample rate (no resampling)
+- **Stereo/Mono**: Automatically handles mono and stereo audio
+
+### Performance Characteristics
+- **Non-blocking**: UI remains responsive during encoding
+- **Progress Reporting**: Real-time progress updates during encoding
+- **Lazy Loading**: MP3 encoder only loads when first needed
+- **Memory Management**: Efficient handling of large audio files
+- **Error Handling**: Comprehensive error reporting and recovery
+
+### Quality Settings
+- **128 kbps**: Smaller file size, good for speech
+- **192 kbps**: Balanced quality/size, recommended default
+- **256 kbps**: High quality, good for music
+- **320 kbps**: Maximum quality, largest file size
