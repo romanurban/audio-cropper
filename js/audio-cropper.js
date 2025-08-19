@@ -81,6 +81,11 @@ export class AudioChunkingEditor {
         this.clearSelectionBtn = document.getElementById('clearSelectionBtn');
         this.progress = document.getElementById('progress');
         this.progressBar = document.getElementById('progressBar');
+        
+        // Loading overlay elements
+        this.waveformLoadingOverlay = document.getElementById('waveformLoadingOverlay');
+        this.loadingStage = document.getElementById('loadingStage');
+        this.loadingPercentage = document.getElementById('loadingPercentage');
     }
 
     initializeComponents() {
@@ -224,19 +229,25 @@ export class AudioChunkingEditor {
             return;
         }
         
+        // Clear existing waveform and audio when loading new file
+        this.clearExistingAudio();
+        
         this.originalFile = file;
-        this.progress.style.display = 'block';
-        this.updateProgress(0);
+        
+        // Ensure waveform container is visible before showing progress
+        this.waveformContainer.style.display = 'block';
+        this.showLoadingProgress('Initializing audio context...');
         
         try {
             await this.initializeAudioContext();
-            this.updateProgress(20);
+            this.updateProgress(10, 'Reading file...');
             
-            const arrayBuffer = await file.arrayBuffer();
-            this.updateProgress(50);
+            // Read file with progress tracking for large files
+            const arrayBuffer = await this.readFileWithProgress(file);
+            this.updateProgress(60, 'Decoding audio data...');
             
-            this.audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-            this.updateProgress(75);
+            this.audioBuffer = await this.decodeAudioDataWithProgress(arrayBuffer);
+            this.updateProgress(85, 'Generating waveform...');
             
             // Reset states
             this.audioPlayer.pausedAtTime = 0;
@@ -270,7 +281,7 @@ export class AudioChunkingEditor {
             
             requestAnimationFrame(() => {
                 this.waveformRenderer.generateWaveform(this.audioBuffer);
-                this.updateProgress(100);
+                this.updateProgress(100, 'Complete!');
                 
                 this.updateDuration();
                 this.updateCurrentTime();
@@ -278,24 +289,254 @@ export class AudioChunkingEditor {
                 this.updateDeleteButton();
                 this.enableControls();
                 
-                setTimeout(() => {
-                    this.progress.style.display = 'none';
-                }, 500);
+                this.hideLoadingProgress();
+                
+                // Reset read timing for next file
+                this.readStartTime = null;
             });
             
         } catch (error) {
             console.error('Error processing audio file:', error);
-            alert('Error processing audio file. Please try another file.');
-            this.progress.style.display = 'none';
+            
+            // Show more specific error messages
+            let errorMessage = 'Error processing audio file. Please try another file.';
+            if (error.name === 'NotSupportedError') {
+                errorMessage = 'This audio format is not supported. Please try a WAV, MP3, or OGG file.';
+            } else if (error.name === 'QuotaExceededError') {
+                errorMessage = 'File is too large. Please try a smaller audio file.';
+            } else if (error.message.includes('Failed to read file')) {
+                errorMessage = 'Failed to read the file. The file may be corrupted or too large.';
+            }
+            
+            alert(errorMessage);
+            this.hideLoadingProgress();
             
             // Reset upload area to full size on error
             this.uploadArea.classList.remove('compact');
             this.resetUploadText();
+            
+            // Reset read timing
+            this.readStartTime = null;
         }
     }
 
-    updateProgress(percent) {
+    updateProgress(percent, statusText = '') {
         this.progressBar.style.width = percent + '%';
+        if (statusText) {
+            this.updateProgressStatus(statusText);
+        }
+        
+        // Update waveform loading overlay
+        if (this.loadingPercentage) {
+            this.loadingPercentage.textContent = Math.round(percent) + '%';
+        }
+        if (statusText && this.loadingStage) {
+            this.loadingStage.textContent = statusText;
+        }
+    }
+
+    showLoadingProgress(statusText = 'Loading...') {
+        // Force display and reset progress bar
+        this.progress.style.display = 'block';
+        this.progressBar.style.width = '0%';
+        
+        // Show waveform loading overlay
+        if (this.waveformLoadingOverlay) {
+            this.waveformLoadingOverlay.style.display = 'flex';
+        }
+        
+        // Small delay to ensure DOM update before starting progress
+        requestAnimationFrame(() => {
+            this.updateProgress(1, statusText);
+        });
+    }
+
+    hideLoadingProgress() {
+        setTimeout(() => {
+            this.progress.style.display = 'none';
+            this.updateProgressStatus('');
+            
+            // Hide waveform loading overlay
+            if (this.waveformLoadingOverlay) {
+                this.waveformLoadingOverlay.style.display = 'none';
+            }
+        }, 500);
+    }
+
+    updateProgressStatus(text) {
+        let statusElement = document.getElementById('progressStatus');
+        if (!statusElement) {
+            statusElement = document.createElement('div');
+            statusElement.id = 'progressStatus';
+            statusElement.style.cssText = `
+                position: absolute;
+                top: -25px;
+                left: 0;
+                right: 0;
+                text-align: center;
+                font-size: 12px;
+                color: #4CAF50;
+                font-family: 'Courier New', monospace;
+                text-shadow: 0 0 4px rgba(76, 175, 80, 0.6);
+            `;
+            this.progress.appendChild(statusElement);
+        }
+        statusElement.textContent = text;
+    }
+
+    async readFileWithProgress(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            const chunkSize = 1024 * 1024; // 1MB chunks
+            const totalSize = file.size;
+            let loadedSize = 0;
+            
+            // For small files (< 10MB), use direct arrayBuffer read
+            if (totalSize < 10 * 1024 * 1024) {
+                reader.onloadstart = () => {
+                    this.updateProgress(10, `Reading file (${this.formatFileSize(totalSize)})...`);
+                };
+                
+                reader.onprogress = (e) => {
+                    if (e.lengthComputable) {
+                        const progressPercent = 10 + (e.loaded / e.total * 50); // 10-60%
+                        this.updateProgress(progressPercent, `Reading file (${this.formatFileSize(e.loaded)}/${this.formatFileSize(e.total)})...`);
+                    }
+                };
+                
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(new Error('Failed to read file'));
+                reader.readAsArrayBuffer(file);
+                return;
+            }
+            
+            // For large files, show more detailed progress
+            this.updateProgress(10, `Reading large file (${this.formatFileSize(totalSize)})...`);
+            
+            reader.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    const progressPercent = 10 + (e.loaded / e.total * 50); // 10-60%
+                    const speed = this.calculateReadSpeed(e.loaded, Date.now());
+                    this.updateProgress(
+                        progressPercent, 
+                        `Reading file (${this.formatFileSize(e.loaded)}/${this.formatFileSize(e.total)}) ${speed}`
+                    );
+                }
+            };
+            
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(new Error('Failed to read file'));
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    formatFileSize(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    calculateReadSpeed(loadedBytes, currentTime) {
+        if (!this.readStartTime) {
+            this.readStartTime = currentTime;
+            return '';
+        }
+        
+        const elapsed = (currentTime - this.readStartTime) / 1000; // seconds
+        if (elapsed < 0.5) return ''; // Don't show speed for very short durations
+        
+        const speed = loadedBytes / elapsed;
+        return `(${this.formatFileSize(speed)}/s)`;
+    }
+
+    async decodeAudioDataWithProgress(arrayBuffer) {
+        return new Promise((resolve, reject) => {
+            // Start decoding with periodic progress updates
+            let progressInterval;
+            let progress = 60;
+            
+            // Simulate progress for decoding (since Web Audio API doesn't provide real progress)
+            progressInterval = setInterval(() => {
+                if (progress < 83) {
+                    progress += 0.5;
+                    this.updateProgress(progress, 'Decoding audio data...');
+                }
+            }, 50);
+            
+            // Handle the actual decoding
+            this.audioContext.decodeAudioData(arrayBuffer)
+                .then((audioBuffer) => {
+                    clearInterval(progressInterval);
+                    resolve(audioBuffer);
+                })
+                .catch((error) => {
+                    clearInterval(progressInterval);
+                    reject(error);
+                });
+        });
+    }
+
+    clearExistingAudio() {
+        // Stop any current playback
+        if (this.audioPlayer && this.audioPlayer.isPlaying) {
+            this.audioPlayer.stop();
+        }
+        
+        // Clear audio buffer and reset states
+        this.audioBuffer = null;
+        this.seekPosition = 0;
+        this.selection = { start: 0, end: 0 };
+        
+        // Clear waveform canvas
+        if (this.canvas) {
+            const ctx = this.canvas.getContext('2d');
+            ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        }
+        
+        // Clear selection UI
+        this.selectionDiv.style.display = 'none';
+        this.hideResizeHandles();
+        if (this.resizeHandleTimeout) {
+            clearTimeout(this.resizeHandleTimeout);
+            this.resizeHandleTimeout = null;
+        }
+        
+        // Reset chunks
+        if (this.chunkManager) {
+            this.chunkManager.chunks = [];
+            this.chunkManager.selectedChunk = null;
+            this.chunkManager.updateChunkOverlays();
+        }
+        
+        // Reset UI elements
+        this.updateSelectionInfo();
+        this.updateSelectionDuration();
+        this.updateSelectionClock();
+        this.updateDeleteButton();
+        this.updateChunkInfo();
+        
+        // Disable controls
+        this.playBtn.disabled = true;
+        this.stopBtn.disabled = true;
+        this.loopBtn.disabled = true;
+        this.splitBtn.disabled = true;
+        this.cropBtn.disabled = true;
+        this.fadeInBtn.disabled = true;
+        this.fadeOutBtn.disabled = true;
+        this.normalizeBtn.disabled = true;
+        this.silenceBtn.disabled = true;
+        this.deleteBtn.disabled = true;
+        
+        // Reset play button
+        this.playBtn.textContent = '▷';
+        this.playBtn.removeAttribute('data-pause');
+        
+        // Hide loading overlay if visible
+        if (this.waveformLoadingOverlay) {
+            this.waveformLoadingOverlay.style.display = 'none';
+        }
     }
 
     resetUploadText() {
