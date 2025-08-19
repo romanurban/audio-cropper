@@ -186,4 +186,75 @@ export class AudioUtils {
         
         return newBuffer;
     }
+
+    /**
+     * Finds the nearest zero crossing to a target time position
+     * @param {AudioBuffer} audioBuffer - The audio buffer to analyze
+     * @param {number} targetTime - Target time in seconds to find zero crossing near
+     * @param {number} searchWindow - Search window in seconds (default 0.01 = 10ms)
+     * @returns {number} Time position of nearest zero crossing
+     */
+    static findNearestZeroCrossing(audioBuffer, targetTime, searchWindow = 0.01) {
+        if (!audioBuffer || targetTime < 0 || targetTime > audioBuffer.duration) {
+            return targetTime;
+        }
+
+        const sampleRate = audioBuffer.sampleRate;
+        const channels = audioBuffer.numberOfChannels;
+        const targetSample = Math.floor(targetTime * sampleRate);
+        const windowSamples = Math.floor(searchWindow * sampleRate);
+        
+        // Define search range around target
+        const startSample = Math.max(0, targetSample - windowSamples);
+        const endSample = Math.min(audioBuffer.length - 1, targetSample + windowSamples);
+        
+        let bestZeroCrossing = targetTime;
+        let minDistance = Infinity;
+        
+        // Search for zero crossings in all channels
+        for (let channel = 0; channel < channels; channel++) {
+            const channelData = audioBuffer.getChannelData(channel);
+            
+            for (let i = startSample; i < endSample - 1; i++) {
+                const current = channelData[i];
+                const next = channelData[i + 1];
+                
+                // Zero crossing occurs when signs differ (and neither is exactly zero)
+                if ((current >= 0 && next < 0) || (current < 0 && next >= 0)) {
+                    // Find precise zero crossing position using linear interpolation
+                    const ratio = Math.abs(current) / (Math.abs(current) + Math.abs(next));
+                    const zeroCrossingSample = i + ratio;
+                    const zeroCrossingTime = zeroCrossingSample / sampleRate;
+                    
+                    const distance = Math.abs(zeroCrossingTime - targetTime);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        bestZeroCrossing = zeroCrossingTime;
+                    }
+                }
+            }
+        }
+        
+        return bestZeroCrossing;
+    }
+
+    /**
+     * Snaps a time position to the nearest zero crossing if within threshold
+     * @param {AudioBuffer} audioBuffer - The audio buffer to analyze
+     * @param {number} time - Time position to potentially snap
+     * @param {boolean} snapEnabled - Whether zero-crossing snap is enabled
+     * @param {number} threshold - Maximum distance to snap (default 0.005 = 5ms)
+     * @returns {number} Snapped time position
+     */
+    static snapToZeroCrossing(audioBuffer, time, snapEnabled = true, threshold = 0.005) {
+        if (!snapEnabled || !audioBuffer) {
+            return time;
+        }
+        
+        const nearestZeroCrossing = this.findNearestZeroCrossing(audioBuffer, time, threshold);
+        const distance = Math.abs(nearestZeroCrossing - time);
+        
+        // Only snap if within threshold
+        return distance <= threshold ? nearestZeroCrossing : time;
+    }
 }

@@ -29,6 +29,9 @@ export class AudioChunkingEditor {
         this.resizeHandlesVisible = false;
         this.resizeHandleTimeout = null;
         this.minSelectionWidth = 0.1; // minimum selection width in seconds
+        
+        // Zero-crossing snap
+        this.zeroCrossingSnapEnabled = true;
 
         this.initializeElements();
         this.initializeComponents();
@@ -82,6 +85,7 @@ export class AudioChunkingEditor {
         this.selectionEndTime = document.getElementById('selectionEndTime');
         this.selectionDurationTime = document.getElementById('selectionDurationTime');
         this.clearSelectionBtn = document.getElementById('clearSelectionBtn');
+        this.zeroCrossingSnapToggle = document.getElementById('zeroCrossingSnapToggle');
         this.progress = document.getElementById('progress');
         this.progressBar = document.getElementById('progressBar');
         
@@ -146,6 +150,9 @@ export class AudioChunkingEditor {
         this.silenceBtn.addEventListener('click', () => this.applySilence());
         this.deleteBtn.addEventListener('click', () => this.delete());
         this.clearSelectionBtn.addEventListener('click', () => this.clearSelection());
+        this.zeroCrossingSnapToggle.addEventListener('change', (e) => {
+            this.zeroCrossingSnapEnabled = e.target.checked;
+        });
         
         // Export popup event listeners
         this.exportPopupClose.addEventListener('click', () => this.hideExportPopup());
@@ -693,9 +700,11 @@ export class AudioChunkingEditor {
         this.dragStarted = false;
         
         // Clear existing selection when starting new drag
-        this.selection.start = clickTime;
-        this.selection.end = clickTime;
-        this.seekPosition = clickTime;
+        // Apply zero-crossing snap to selection start
+        const snappedTime = AudioUtils.snapToZeroCrossing(this.audioBuffer, clickTime, this.zeroCrossingSnapEnabled);
+        this.selection.start = snappedTime;
+        this.selection.end = snappedTime;
+        this.seekPosition = snappedTime;
         
         // Hide existing resize handles when starting new selection
         this.hideResizeHandles();
@@ -745,7 +754,8 @@ export class AudioChunkingEditor {
         }
         
         if (this.dragStarted) {
-            this.selection.end = currentTime;
+            // Apply zero-crossing snap to selection end
+            this.selection.end = AudioUtils.snapToZeroCrossing(this.audioBuffer, currentTime, this.zeroCrossingSnapEnabled);
             // Position seek marker and play progress line at the leftmost position of the selection
             this.seekPosition = Math.min(this.selection.start, this.selection.end);
             this.audioPlayer.pausedAtTime = this.seekPosition;
@@ -835,12 +845,14 @@ export class AudioChunkingEditor {
         
         if (this.resizeHandle === 'left') {
             // Resize from left edge - update start time
+            const snappedTime = AudioUtils.snapToZeroCrossing(this.audioBuffer, clampedTime, this.zeroCrossingSnapEnabled);
             const maxStart = this.selection.end - this.minSelectionWidth;
-            this.selection.start = Math.min(clampedTime, maxStart);
+            this.selection.start = Math.min(snappedTime, maxStart);
         } else if (this.resizeHandle === 'right') {
             // Resize from right edge - update end time
+            const snappedTime = AudioUtils.snapToZeroCrossing(this.audioBuffer, clampedTime, this.zeroCrossingSnapEnabled);
             const minEnd = this.selection.start + this.minSelectionWidth;
-            this.selection.end = Math.max(clampedTime, minEnd);
+            this.selection.end = Math.max(snappedTime, minEnd);
         }
         
         // Update visual display
@@ -1259,11 +1271,17 @@ export class AudioChunkingEditor {
     splitAtPosition() {
         if (!this.audioBuffer) return;
         
-        const success = this.chunkManager.splitAtPosition(this.seekPosition);
+        // Apply zero-crossing snap to split position
+        const snappedPosition = AudioUtils.snapToZeroCrossing(this.audioBuffer, this.seekPosition, this.zeroCrossingSnapEnabled);
+        
+        const success = this.chunkManager.splitAtPosition(snappedPosition);
         if (!success) {
             alert('Split position must be within an existing chunk');
             return;
         }
+        
+        // Update seek position to snapped position
+        this.seekPosition = snappedPosition;
         
         this.waveformRenderer.chunks = this.chunkManager.chunks;
         this.updateChunkInfo();
