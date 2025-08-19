@@ -47,13 +47,15 @@ This is a client-side audio cropping tool that runs entirely in the browser usin
 - Waveform visualization using HTML5 Canvas
 - Audio chunking system that allows splitting at any position
 - Region selection for cropping specific segments
-- Audio effects: fade in/out, silence, and RMS-based normalize to target dB level
-- Playback controls with seek functionality and loop mode
-- Multi-format export: WAV (uncompressed) and MP3 (128/192/256/320 kbps)
-- Web Worker-based MP3 encoding to prevent UI blocking
-- Visual chunk overlays and selection indicators
-- Resizable selection handles for precise region adjustment
-- Comprehensive keyboard shortcuts for efficient editing
+ - Audio effects: fade in/out, silence, and RMS-based normalize to target dB level
+ - Playback controls with seek functionality and loop mode
+ - Multi-format export: WAV (uncompressed) and MP3 (128/192/256/320 kbps)
+ - Web Worker-based MP3 encoding to prevent UI blocking
+ - Visual chunk overlays and selection indicators
+ - Resizable selection handles for precise region adjustment
+ - Comprehensive keyboard shortcuts for efficient editing
+ - Undo/Redo history with buttons and shortcuts
+ - Zero-crossing snap for selection, resize, and splits (toggleable)
 
 ### Audio Processing Pipeline
 
@@ -218,11 +220,14 @@ audio-cropper/
 - Multi-format export: WAV (uncompressed) or MP3 (compressed)
 - MP3 quality selection: 128, 192, 256, or 320 kbps
 - Progress indicator during export operations
+ - Undo/Redo toolbar buttons with dynamic tooltips
+ - Zero-crossing snap toggle in the UI
 
 ## Keyboard Shortcuts (highlights)
 
 - Space: Toggle play/pause; Shift+Space: play from selection start
 - Ctrl/Cmd+L: Toggle loop; Ctrl/Cmd+S: Split; Ctrl/Cmd+E: Export
+- Ctrl/Cmd+Z: Undo; Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y: Redo
 - Arrow Left/Right: Seek 1s (Shift: 5s); 0–9: Jump by 10% increments
 - Ctrl/Cmd+F / Ctrl/Cmd+Shift+F: Fade in/out; Ctrl/Cmd+N: Normalize; Ctrl/Cmd+M: Silence
 - Escape: Stop and clear selection; H or ?: Show shortcuts
@@ -232,6 +237,19 @@ audio-cropper/
 - File read progress with size and speed estimate; extra feedback for files >10MB
 - Decoding progress indicator (simulated) and waveform loading overlay to keep UI responsive
 - MP3 encoding runs in a Web Worker to avoid blocking the main thread
+
+## Undo/Redo Implementation
+
+- History managed by `js/history-manager.js` with a bounded stack (default 50 states).
+- State snapshots include audio buffer, chunks, selection, seek position, and selected chunk.
+- Actions saved for edits like split, delete, effects, selection changes, and clearing selection.
+- Toolbar buttons update enabled state and tooltips with next undo/redo action.
+
+## Zero-Crossing Snap
+
+- Snaps selection start/end, resize handles, and split position to nearest zero crossing within a threshold.
+- Toggle via the “Zero-crossing snap” checkbox in the control panel.
+- Implemented in `AudioUtils.snapToZeroCrossing()` and applied throughout editor interactions.
 
 ## MP3 Export Implementation
 
@@ -260,4 +278,3 @@ audio-cropper/
 - **192 kbps**: Balanced quality/size, recommended default
 - **256 kbps**: High quality, good for music
 - **320 kbps**: Maximum quality, largest file size
-

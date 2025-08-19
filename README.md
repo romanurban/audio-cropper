@@ -13,9 +13,11 @@ A minimal, client‑side audio editor that runs entirely in the browser. Load a 
 
 - Waveform visualization with Canvas
 - Region selection and chunk splitting
+- Zero-crossing snap for clean edits (toggleable)
 - Keyboard shortcuts (e.g., Space play/pause, Shift+Space play from selection)
 - Playback controls with seek and loop
 - Simple effects: fade in/out, silence, normalize
+- Undo/Redo with toolbar buttons and Ctrl/Cmd shortcuts
 - Export to WAV (16‑bit) or MP3 (128–320 kbps)
 - Large‑file friendly: progress for reading/decoding and encoding
 - All processing local to your device
