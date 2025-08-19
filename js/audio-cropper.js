@@ -138,6 +138,9 @@ export class AudioChunkingEditor {
         // Global resize event listeners
         document.addEventListener('mousemove', (e) => this.handleResizeMove(e));
         document.addEventListener('mouseup', () => this.handleResizeEnd());
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => this.handleKeyDown(e));
     }
 
     async initializeAudioContext() {
@@ -689,6 +692,42 @@ export class AudioChunkingEditor {
         }
     }
 
+    handleKeyDown(event) {
+        // Ignore shortcuts when typing in inputs
+        const target = event.target;
+        if (target && (
+            target.tagName === 'INPUT' ||
+            target.tagName === 'TEXTAREA' ||
+            target.tagName === 'SELECT' ||
+            target.isContentEditable
+        )) {
+            return;
+        }
+
+        // Check if audio is loaded
+        if (!this.audioBuffer || !this.audioPlayer) {
+            return;
+        }
+
+        // Check if currently processing (crop operation)
+        if (this.cropBtn.disabled) {
+            return;
+        }
+
+        switch (event.code) {
+            case 'Space':
+                if (event.shiftKey) {
+                    // Shift+Space: Play from selection start
+                    this.playFromSelectionStart();
+                } else {
+                    // Space: Toggle play/pause
+                    this.togglePlayPause();
+                }
+                event.preventDefault(); // Prevent page scroll
+                break;
+        }
+    }
+
     updateSelectionDisplay() {
         if (!this.audioBuffer || this.chunkManager.chunks.length === 0) return;
         
@@ -876,6 +915,20 @@ export class AudioChunkingEditor {
             this.pause();
         } else {
             this.play();
+        }
+    }
+
+    async playFromSelectionStart() {
+        // If there's a selection, seek to its start and play
+        if (this.selection.start !== this.selection.end) {
+            const selectionStart = Math.min(this.selection.start, this.selection.end);
+            await this.seekToTime(selectionStart);
+            if (!this.audioPlayer.isPlaying) {
+                await this.play();
+            }
+        } else {
+            // No selection - just toggle play/pause
+            this.togglePlayPause();
         }
     }
 
