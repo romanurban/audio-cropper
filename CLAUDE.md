@@ -13,7 +13,7 @@ This is a client-side audio cropping tool that runs entirely in the browser usin
 - **styles.css**: All application styling and UI components
 - **js/**: Modular JavaScript files organized by functionality
 - **No build system**: The application runs directly in the browser using ES6 modules
-- **No dependencies**: Uses only browser APIs (Web Audio API, Canvas API, File API)
+- **Core deps**: No build system; core uses browser APIs only. MP3 export loads lamejs in a Web Worker via CDN.
 
 ### Core Components
 
@@ -95,8 +95,8 @@ python -m http.server 8000  # Then visit http://localhost:8000
 - Requires modern browser with Web Audio API and ES6 module support
 - Must be served over HTTP/HTTPS (not file://) for module imports
 - Audio processing happens entirely in memory (limited by browser memory)
-- Export format is fixed to 16-bit WAV
-- No server-side components or external dependencies
+- Export formats: WAV (16-bit PCM) and MP3 (128/192/256/320 kbps via lamejs in worker)
+- No server-side components; optional CDN load for MP3 encoder
 
 ## Code Organization
 
@@ -218,6 +218,20 @@ audio-cropper/
 - Multi-format export: WAV (uncompressed) or MP3 (compressed)
 - MP3 quality selection: 128, 192, 256, or 320 kbps
 - Progress indicator during export operations
+
+## Keyboard Shortcuts (highlights)
+
+- Space: Toggle play/pause; Shift+Space: play from selection start
+- Ctrl/Cmd+L: Toggle loop; Ctrl/Cmd+S: Split; Ctrl/Cmd+E: Export
+- Arrow Left/Right: Seek 1s (Shift: 5s); 0–9: Jump by 10% increments
+- Ctrl/Cmd+F / Ctrl/Cmd+Shift+F: Fade in/out; Ctrl/Cmd+N: Normalize; Ctrl/Cmd+M: Silence
+- Escape: Stop and clear selection; H or ?: Show shortcuts
+
+## Large File Handling
+
+- File read progress with size and speed estimate; extra feedback for files >10MB
+- Decoding progress indicator (simulated) and waveform loading overlay to keep UI responsive
+- MP3 encoding runs in a Web Worker to avoid blocking the main thread
 
 ## MP3 Export Implementation
 

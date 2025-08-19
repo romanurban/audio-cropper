@@ -6,6 +6,7 @@ import { AudioUtils } from './utils.js';
 import { WaveformRenderer } from './waveform-renderer.js';
 import { ChunkManager } from './chunk-manager.js';
 import { AudioPlayer } from './audio-player.js';
+import { HistoryManager } from './history-manager.js';
 
 export class AudioChunkingEditor {
     constructor() {
@@ -45,6 +46,8 @@ export class AudioChunkingEditor {
         this.rightHandle = document.getElementById('rightHandle');
         
         // Controls
+        this.undoBtn = document.getElementById('undoBtn');
+        this.redoBtn = document.getElementById('redoBtn');
         this.playBtn = document.getElementById('playBtn');
         this.stopBtn = document.getElementById('stopBtn');
         this.loopBtn = document.getElementById('loopBtn');
@@ -92,6 +95,7 @@ export class AudioChunkingEditor {
         this.waveformRenderer = new WaveformRenderer(this.canvas, []);
         this.chunkManager = new ChunkManager(this.waveform);
         this.audioPlayer = null; // Will be initialized with audio context
+        this.historyManager = null; // Will be initialized with audio context
     }
     
     setupEventListeners() {
@@ -129,6 +133,8 @@ export class AudioChunkingEditor {
         this.rightHandle.addEventListener('mousedown', (e) => this.handleResizeStart(e, 'right'));
         
         // Controls
+        this.undoBtn.addEventListener('click', () => this.undo());
+        this.redoBtn.addEventListener('click', () => this.redo());
         this.playBtn.addEventListener('click', () => this.togglePlayPause());
         this.stopBtn.addEventListener('click', () => this.stop());
         this.loopBtn.addEventListener('click', () => this.toggleLoop());
@@ -190,6 +196,7 @@ export class AudioChunkingEditor {
             }
 
             this.audioPlayer = new AudioPlayer(this.audioContext);
+            this.historyManager = new HistoryManager(this.audioContext);
             this.isInitialized = true;
             console.log('AudioContext initialized:', this.audioContext.state);
         } catch (error) {
@@ -231,6 +238,11 @@ export class AudioChunkingEditor {
         
         // Clear existing waveform and audio when loading new file
         this.clearExistingAudio();
+        
+        // Clear history when loading new file
+        if (this.historyManager) {
+            this.historyManager.clear();
+        }
         
         this.originalFile = file;
         
@@ -288,6 +300,9 @@ export class AudioChunkingEditor {
                 this.updateChunkInfo();
                 this.updateDeleteButton();
                 this.enableControls();
+                
+                // Save initial state to history
+                this.saveCurrentState('Load audio file');
                 
                 this.hideLoadingProgress();
                 
@@ -518,6 +533,8 @@ export class AudioChunkingEditor {
         this.updateChunkInfo();
         
         // Disable controls
+        this.undoBtn.disabled = true;
+        this.redoBtn.disabled = true;
         this.playBtn.disabled = true;
         this.stopBtn.disabled = true;
         this.loopBtn.disabled = true;
@@ -946,6 +963,12 @@ export class AudioChunkingEditor {
         
         // Schedule resize handles to appear with delay
         this.scheduleResizeHandles();
+        
+        // Save state to history for significant selections (longer than 0.1 seconds)
+        const selectionDuration = Math.abs(this.selection.end - this.selection.start);
+        if (selectionDuration > 0.1) {
+            this.saveCurrentState(`Create selection (${selectionDuration.toFixed(2)}s)`);
+        }
     }
 
     handleDocumentClick(event) {
@@ -1135,6 +1158,27 @@ export class AudioChunkingEditor {
                 }
                 break;
                 
+            case 'KeyZ':
+                if (event.metaKey || event.ctrlKey) {
+                    if (event.shiftKey) {
+                        // Cmd/Ctrl+Shift+Z: Redo
+                        this.redo();
+                    } else {
+                        // Cmd/Ctrl+Z: Undo
+                        this.undo();
+                    }
+                    event.preventDefault();
+                }
+                break;
+                
+            case 'KeyY':
+                if (event.metaKey || event.ctrlKey) {
+                    // Cmd/Ctrl+Y: Redo (alternative shortcut)
+                    this.redo();
+                    event.preventDefault();
+                }
+                break;
+                
             case 'KeyH':
             case 'Slash':
                 // H or ?: Show keyboard shortcuts help
@@ -1225,6 +1269,9 @@ export class AudioChunkingEditor {
         this.updateChunkInfo();
         this.updateDeleteButton();
         this.waveformRenderer.drawWaveform(this.audioBuffer, this.seekPosition, this.audioPlayer.getCurrentPlaybackTime());
+        
+        // Save state to history
+        this.saveCurrentState(`Split at ${this.seekPosition.toFixed(2)}s`);
     }
 
     delete() {
@@ -1252,14 +1299,28 @@ export class AudioChunkingEditor {
                 return;
             }
             
+            const selectedChunkId = this.chunkManager.selectedChunk.id;
             this.deleteAudioRange(this.chunkManager.selectedChunk.start, this.chunkManager.selectedChunk.end);
             this.chunkManager.selectedChunk = null;
+            
+            this.updateDeleteButton();
+            this.updateSelectionInfo();
+            this.updateSelectionDuration();
+            this.updateSelectionClock();
+            
+            // Save state to history
+            this.saveCurrentState(`Delete chunk ${selectedChunkId}`);
+            return;
         }
         
         this.updateDeleteButton();
         this.updateSelectionInfo();
         this.updateSelectionDuration();
         this.updateSelectionClock();
+        
+        // Save state to history for selection deletion
+        const deletedRange = `selection (${Math.min(this.selection.start, this.selection.end).toFixed(2)}s-${Math.max(this.selection.start, this.selection.end).toFixed(2)}s)`;
+        this.saveCurrentState(`Delete ${deletedRange}`);
     }
 
     deleteAudioRange(startTime, endTime) {
@@ -1379,6 +1440,9 @@ export class AudioChunkingEditor {
         
         // Redraw waveform
         this.waveformRenderer.drawWaveform(this.audioBuffer, this.seekPosition, this.audioPlayer.getCurrentPlaybackTime(), this.selection);
+        
+        // Save state to history
+        this.saveCurrentState('Select all audio');
     }
 
     async seekRelative(deltaSeconds) {
@@ -1578,6 +1642,8 @@ NAVIGATION:
 • 0-9 - Jump to 0%-90% of audio
 
 EDITING:
+• Ctrl/Cmd+Z - Undo last action
+• Ctrl/Cmd+Shift+Z / Ctrl/Cmd+Y - Redo action
 • Ctrl/Cmd+A - Select all audio
 • Ctrl/Cmd+S - Split at current position
 • Delete/Backspace - Delete selection or chunk
@@ -1903,6 +1969,7 @@ HELP:
         this.updateFadeButtons();
         this.updateNormalizeButton();
         this.updateSilenceButton();
+        this.updateUndoRedoButtons();
     }
 
     applyFadeIn() {
@@ -2043,6 +2110,9 @@ HELP:
         this.updateSilenceButton();
         this.updateSilenceButton();
         this.updateChunkInfo();
+        
+        // Save state to history
+        this.saveCurrentState('Apply silence effect');
     }
 
     applyFadeEffect(startTime, endTime, type) {
@@ -2114,6 +2184,9 @@ HELP:
         this.updateSilenceButton();
         this.updateSilenceButton();
         this.updateChunkInfo();
+        
+        // Save state to history
+        this.saveCurrentState(`Apply fade ${type} effect`);
     }
 
     applyNormalizeEffect(startTime, endTime) {
@@ -2146,6 +2219,9 @@ HELP:
         this.updateNormalizeButton();
         this.updateSilenceButton();
         this.updateChunkInfo();
+        
+        // Save state to history
+        this.saveCurrentState('Apply normalize effect');
     }
 
     updateFadeButtons() {
@@ -2191,6 +2267,122 @@ HELP:
         if (this.audioBuffer) {
             this.waveformRenderer.drawWaveform(this.audioBuffer, this.seekPosition, this.audioPlayer.getCurrentPlaybackTime());
         }
+        
+        // Save state to history
+        this.saveCurrentState('Clear selection');
+    }
+
+    /**
+     * Saves current state to history
+     * @param {string} action - Description of the action
+     */
+    saveCurrentState(action) {
+        if (!this.historyManager || !this.audioBuffer) return;
+        
+        const state = this.historyManager.createStateSnapshot(this);
+        this.historyManager.saveState(state, action);
+        this.updateUndoRedoButtons();
+    }
+
+    /**
+     * Undoes the last action
+     */
+    undo() {
+        if (!this.historyManager || !this.historyManager.canUndo()) {
+            return;
+        }
+        
+        const previousState = this.historyManager.undo();
+        if (previousState) {
+            this.restoreState(previousState);
+            this.updateUndoRedoButtons();
+            console.log(`Undone: ${this.historyManager.getHistoryInfo().undoAction || 'Unknown action'}`);
+        }
+    }
+
+    /**
+     * Redoes the next action
+     */
+    redo() {
+        if (!this.historyManager || !this.historyManager.canRedo()) {
+            return;
+        }
+        
+        const nextState = this.historyManager.redo();
+        if (nextState) {
+            this.restoreState(nextState);
+            this.updateUndoRedoButtons();
+            console.log(`Redone: ${nextState.action}`);
+        }
+    }
+
+    /**
+     * Restores editor state from a history snapshot
+     * @param {Object} state - State snapshot to restore
+     */
+    restoreState(state) {
+        // Restore audio buffer
+        this.audioBuffer = state.audioBuffer;
+        
+        // Restore chunks
+        this.chunkManager.chunks = state.chunks.map(chunk => ({ ...chunk }));
+        this.chunkManager.selectedChunk = state.selectedChunk ? { ...state.selectedChunk } : null;
+        
+        // Restore selection
+        this.selection = { ...state.selection };
+        this.seekPosition = state.seekPosition;
+        this.audioPlayer.pausedAtTime = state.seekPosition;
+        
+        // Update visuals
+        this.waveformRenderer.chunks = this.chunkManager.chunks;
+        this.waveformRenderer.generateWaveform(this.audioBuffer);
+        this.chunkManager.updateChunkOverlays();
+        
+        // Update UI
+        this.updateSelectionDisplay();
+        this.updateSelectionInfo();
+        this.updateSelectionDuration();
+        this.updateSelectionClock();
+        this.updateDeleteButton();
+        this.updateFadeButtons();
+        this.updateNormalizeButton();
+        this.updateSilenceButton();
+        this.updateChunkInfo();
+        this.updateDuration();
+        this.updateCurrentTime();
+        
+        // Clear resize handles if no selection
+        if (this.selection.start === this.selection.end) {
+            this.selectionDiv.style.display = 'none';
+            this.hideResizeHandles();
+            if (this.resizeHandleTimeout) {
+                clearTimeout(this.resizeHandleTimeout);
+                this.resizeHandleTimeout = null;
+            }
+        } else {
+            this.scheduleResizeHandles();
+        }
+    }
+
+    /**
+     * Updates undo/redo button states
+     */
+    updateUndoRedoButtons() {
+        if (!this.historyManager) {
+            this.undoBtn.disabled = true;
+            this.redoBtn.disabled = true;
+            return;
+        }
+        
+        this.undoBtn.disabled = !this.historyManager.canUndo();
+        this.redoBtn.disabled = !this.historyManager.canRedo();
+        
+        // Update tooltips with action descriptions
+        const undoAction = this.historyManager.getUndoAction();
+        const redoAction = this.historyManager.getRedoAction();
+        
+        this.undoBtn.title = undoAction ? `Undo: ${undoAction}` : 'Undo';
+        this.redoBtn.title = redoAction ? `Redo: ${redoAction}` : 'Redo';
     }
 
     // Cleanup method for when the editor is destroyed
@@ -2205,6 +2397,11 @@ HELP:
         if (this.popupKeyHandler) {
             document.removeEventListener('keydown', this.popupKeyHandler);
             this.popupKeyHandler = null;
+        }
+        
+        // Clear history
+        if (this.historyManager) {
+            this.historyManager.clear();
         }
     }
 }

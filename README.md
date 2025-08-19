@@ -1,6 +1,6 @@
 # Audio Cropper (Browser)
 
-A minimal, client‑side audio editor that runs entirely in the browser. It lets you load a file, visualize the waveform, select or split regions into chunks, apply simple effects, and export WAV—no server required.
+A minimal, client‑side audio editor that runs entirely in the browser. Load a file, visualize the waveform, select or split regions, apply simple effects, and export to WAV or MP3 — no server required.
 
 ## Quick Start
 
@@ -13,17 +13,21 @@ A minimal, client‑side audio editor that runs entirely in the browser. It lets
 
 - Waveform visualization with Canvas
 - Region selection and chunk splitting
+- Keyboard shortcuts (e.g., Space play/pause, Shift+Space play from selection)
 - Playback controls with seek and loop
 - Simple effects: fade in/out, silence, normalize
-- Export selection, chunk, or full audio as 16‑bit WAV
+- Export to WAV (16‑bit) or MP3 (128–320 kbps)
+- Large‑file friendly: progress for reading/decoding and encoding
 - All processing local to your device
 
 ## Tech
 
 - Vanilla JavaScript + ES modules
 - Web Audio API and HTML5 Canvas
+- MP3 encoding in a Web Worker (lamejs via CDN)
 - No build tools or external dependencies
 
 ## Notes
 
 - Use a modern browser; open via HTTP/HTTPS (not `file://`).
+- MP3 export loads the encoder in a worker from a CDN.
