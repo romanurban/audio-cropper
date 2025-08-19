@@ -2119,7 +2119,7 @@ HELP:
     applyNormalizeEffect(startTime, endTime) {
         if (!this.audioBuffer) return;
 
-        this.audioBuffer = AudioUtils.normalizeAudio(this.audioBuffer, startTime, endTime, this.audioContext);
+        this.audioBuffer = AudioUtils.normalizeAudio(this.audioBuffer, startTime, endTime, this.audioContext, -0.5);
         this.waveformRenderer.generateWaveform(this.audioBuffer);
         
         // Clear selection after applying normalize

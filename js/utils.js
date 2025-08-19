@@ -169,7 +169,7 @@ export class AudioUtils {
         }
         
         // Safety check to prevent extreme amplification
-        const maxGain = Math.pow(10, 20 / 20); // 20dB max gain
+        const maxGain = Math.pow(10, 30 / 20); // 30dB max gain
         if (normalizationFactor > maxGain) {
             normalizationFactor = maxGain;
         }
