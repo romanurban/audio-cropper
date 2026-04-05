@@ -7,6 +7,7 @@ import { WaveformRenderer } from './waveform-renderer.js';
 import { ChunkManager } from './chunk-manager.js';
 import { AudioPlayer } from './audio-player.js';
 import { HistoryManager } from './history-manager.js';
+import { toast } from './toast.js';
 
 export class AudioChunkingEditor {
     constructor() {
@@ -266,13 +267,13 @@ export class AudioChunkingEditor {
             this.handleFile(file);
         } catch (error) {
             console.error('Error loading sample file:', error);
-            alert('Error loading sample file. Please try uploading your own audio file.');
+            toast('Error loading sample file. Please try uploading your own audio file.', 'error');
         }
     }
 
     async handleFile(file) {
         if (!file.type.startsWith('audio/')) {
-            alert('Please select an audio file');
+            toast('Please select an audio file', 'warning');
             // Reset upload area to full size for invalid files
             this.uploadArea.classList.remove('compact');
             this.resetUploadText();
@@ -366,7 +367,7 @@ export class AudioChunkingEditor {
                 errorMessage = 'Failed to read the file. The file may be corrupted or too large.';
             }
             
-            alert(errorMessage);
+            toast(errorMessage, 'error');
             this.hideLoadingProgress();
             
             // Reset upload area to full size on error
@@ -1370,7 +1371,7 @@ export class AudioChunkingEditor {
         
         const success = this.chunkManager.splitAtPosition(snappedPosition);
         if (!success) {
-            alert('Split position must be within an existing chunk');
+            toast('Split position must be within an existing chunk', 'warning');
             return;
         }
         
@@ -1407,7 +1408,7 @@ export class AudioChunkingEditor {
         } else if (this.chunkManager.selectedChunk) {
             // Delete selected chunk
             if (this.chunkManager.chunks.length <= 1) {
-                alert('Cannot delete chunk - at least one chunk must remain');
+                toast('Cannot delete chunk - at least one chunk must remain', 'warning');
                 return;
             }
             
@@ -1631,7 +1632,7 @@ export class AudioChunkingEditor {
                 bitrate = parseInt(bitrateInput.value);
             } else {
                 // No bitrate selected, show error
-                alert('Please select an MP3 quality setting.');
+                toast('Please select an MP3 quality setting.', 'warning');
                 return;
             }
         }
@@ -1747,41 +1748,56 @@ export class AudioChunkingEditor {
     }
 
     showKeyboardShortcuts() {
-        const shortcuts = `
-🎵 Audio Editor - Keyboard Shortcuts
+        // Remove existing modal if open
+        const existing = document.querySelector('.shortcuts-modal-overlay');
+        if (existing) { existing.remove(); return; }
 
-PLAYBACK:
-• Space - Toggle play/pause
-• Shift+Space - Play from selection start
-• Escape - Stop and clear selection
-• Ctrl/Cmd+L - Toggle loop mode
+        const overlay = document.createElement('div');
+        overlay.className = 'shortcuts-modal-overlay';
+        overlay.innerHTML = `
+            <div class="shortcuts-modal">
+                <div class="shortcuts-modal-header">
+                    <span>Keyboard Shortcuts</span>
+                    <button class="shortcuts-modal-close">&times;</button>
+                </div>
+                <div class="shortcuts-modal-body">
+                    <div class="shortcuts-section">
+                        <h3>Playback</h3>
+                        <div class="shortcut-row"><kbd>Space</kbd> Toggle play/pause</div>
+                        <div class="shortcut-row"><kbd>Shift+Space</kbd> Play from selection start</div>
+                        <div class="shortcut-row"><kbd>Escape</kbd> Stop and clear selection</div>
+                        <div class="shortcut-row"><kbd>Ctrl/Cmd+L</kbd> Toggle loop mode</div>
+                    </div>
+                    <div class="shortcuts-section">
+                        <h3>Navigation</h3>
+                        <div class="shortcut-row"><kbd>← →</kbd> Seek 1 second</div>
+                        <div class="shortcut-row"><kbd>Shift+← →</kbd> Seek 5 seconds</div>
+                        <div class="shortcut-row"><kbd>Home / End</kbd> Go to beginning/end</div>
+                        <div class="shortcut-row"><kbd>0-9</kbd> Jump to 0%-90%</div>
+                    </div>
+                    <div class="shortcuts-section">
+                        <h3>Editing</h3>
+                        <div class="shortcut-row"><kbd>Ctrl/Cmd+Z</kbd> Undo</div>
+                        <div class="shortcut-row"><kbd>Ctrl/Cmd+Shift+Z</kbd> Redo</div>
+                        <div class="shortcut-row"><kbd>Ctrl/Cmd+A</kbd> Select all</div>
+                        <div class="shortcut-row"><kbd>Ctrl/Cmd+S</kbd> Split</div>
+                        <div class="shortcut-row"><kbd>Delete</kbd> Delete selection/chunk</div>
+                        <div class="shortcut-row"><kbd>Ctrl/Cmd+E</kbd> Export</div>
+                    </div>
+                    <div class="shortcuts-section">
+                        <h3>Effects</h3>
+                        <div class="shortcut-row"><kbd>Ctrl/Cmd+F</kbd> Fade in</div>
+                        <div class="shortcut-row"><kbd>Ctrl/Cmd+Shift+F</kbd> Fade out</div>
+                        <div class="shortcut-row"><kbd>Ctrl/Cmd+N</kbd> Normalize</div>
+                        <div class="shortcut-row"><kbd>Ctrl/Cmd+M</kbd> Silence</div>
+                    </div>
+                </div>
+            </div>`;
 
-NAVIGATION:
-• ← → - Seek 1 second backward/forward
-• Shift+← → - Seek 5 seconds backward/forward
-• Home - Go to beginning
-• End - Go to end
-• 0-9 - Jump to 0%-90% of audio
-
-EDITING:
-• Ctrl/Cmd+Z - Undo last action
-• Ctrl/Cmd+Shift+Z / Ctrl/Cmd+Y - Redo action
-• Ctrl/Cmd+A - Select all audio
-• Ctrl/Cmd+S - Split at current position
-• Delete/Backspace - Delete selection or chunk
-• Ctrl/Cmd+E - Export selection (WAV/MP3)
-
-EFFECTS:
-• Ctrl/Cmd+F - Apply fade in
-• Ctrl/Cmd+Shift+F - Apply fade out
-• Ctrl/Cmd+N - Normalize audio
-• Ctrl/Cmd+M - Apply silence (mute)
-
-HELP:
-• H or ? - Show this help
-        `;
-        
-        alert(shortcuts);
+        document.body.appendChild(overlay);
+        const close = () => overlay.remove();
+        overlay.querySelector('.shortcuts-modal-close').addEventListener('click', close);
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
     }
 
     toggleLoop() {
@@ -1965,7 +1981,7 @@ HELP:
             
         } catch (error) {
             console.error('Error exporting audio:', error);
-            alert(`Error exporting ${format.toUpperCase()} audio. Please try again.`);
+            toast(`Error exporting ${format.toUpperCase()} audio. Please try again.`, 'error');
             this.progress.style.display = 'none';
             this.cropBtn.disabled = false;
         }
@@ -2117,7 +2133,7 @@ HELP:
             startTime = this.chunkManager.selectedChunk.start;
             endTime = this.chunkManager.selectedChunk.end;
         } else {
-            alert('Please select a region or chunk to apply fade in effect');
+            toast('Please select a region or chunk to apply fade in effect', 'info');
             return;
         }
 
@@ -2138,7 +2154,7 @@ HELP:
             startTime = this.chunkManager.selectedChunk.start;
             endTime = this.chunkManager.selectedChunk.end;
         } else {
-            alert('Please select a region or chunk to apply fade out effect');
+            toast('Please select a region or chunk to apply fade out effect', 'info');
             return;
         }
 
@@ -2159,7 +2175,7 @@ HELP:
             startTime = this.chunkManager.selectedChunk.start;
             endTime = this.chunkManager.selectedChunk.end;
         } else {
-            alert('Please select a region or chunk to apply normalize effect');
+            toast('Please select a region or chunk to apply normalize effect', 'info');
             return;
         }
 
@@ -2180,7 +2196,7 @@ HELP:
             startTime = this.chunkManager.selectedChunk.start;
             endTime = this.chunkManager.selectedChunk.end;
         } else {
-            alert('Please select a region or chunk to apply silence effect');
+            toast('Please select a region or chunk to apply silence effect', 'info');
             return;
         }
 
