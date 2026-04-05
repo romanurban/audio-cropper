@@ -224,8 +224,8 @@ export class AudioPlayer {
      */
     pause() {
         if (!this.isPlaying) return;
-        
-        this.source.stop();
+
+        try { this.source.stop(); } catch (e) { /* Safari: source may already be stopped */ }
         this.pausedAtTime = this.getCurrentPlaybackTime();
         this.isPlaying = false;
         this.currentlyPlayingChunk = null;
@@ -240,7 +240,7 @@ export class AudioPlayer {
      */
     stop(chunks = []) {
         if (this.source) {
-            this.source.stop();
+            try { this.source.stop(); } catch (e) { /* Safari: source may already be stopped */ }
         }
         this.isPlaying = false;
         this.currentlyPlayingChunk = null;
@@ -269,9 +269,9 @@ export class AudioPlayer {
         time = Math.max(0, Math.min(time, audioBuffer.duration));
         
         const wasPlaying = this.isPlaying;
-        
+
         if (this.isPlaying) {
-            this.source.stop();
+            try { this.source.stop(); } catch (e) { /* Safari: source may already be stopped */ }
             this.isPlaying = false;
         }
         

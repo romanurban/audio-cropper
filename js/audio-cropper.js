@@ -125,16 +125,26 @@ export class AudioChunkingEditor {
             }
         });
         
-        // Waveform interaction
+        // Waveform interaction (mouse)
         this.waveform.addEventListener('mousedown', (e) => this.handleMouseDown(e));
         this.waveform.addEventListener('mousemove', (e) => this.handleMouseMove(e));
         this.waveform.addEventListener('mouseup', () => this.handleMouseUp());
         this.waveform.addEventListener('mouseleave', () => this.handleMouseUp());
         this.waveform.addEventListener('click', (e) => this.handleWaveformClick(e));
-        
-        // Resize handles
+
+        // Waveform interaction (touch — iOS Safari)
+        this.waveform.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
+        this.waveform.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
+        this.waveform.addEventListener('touchend', (e) => this.handleTouchEnd(e));
+        this.waveform.addEventListener('touchcancel', () => this.handleMouseUp());
+
+        // Resize handles (mouse)
         this.leftHandle.addEventListener('mousedown', (e) => this.handleResizeStart(e, 'left'));
         this.rightHandle.addEventListener('mousedown', (e) => this.handleResizeStart(e, 'right'));
+
+        // Resize handles (touch — iOS Safari)
+        this.leftHandle.addEventListener('touchstart', (e) => this.handleResizeTouchStart(e, 'left'), { passive: false });
+        this.rightHandle.addEventListener('touchstart', (e) => this.handleResizeTouchStart(e, 'right'), { passive: false });
         
         // Controls
         this.undoBtn.addEventListener('click', () => this.undo());
@@ -184,20 +194,36 @@ export class AudioChunkingEditor {
         // Click outside canvas to deselect chunks
         document.addEventListener('click', (e) => this.handleDocumentClick(e));
         
-        // Global resize event listeners
+        // Global resize event listeners (mouse + touch)
         document.addEventListener('mousemove', (e) => this.handleResizeMove(e));
         document.addEventListener('mouseup', () => this.handleResizeEnd());
+        document.addEventListener('touchmove', (e) => {
+            if (this.isResizing) {
+                e.preventDefault();
+                this.handleResizeMove(this._touchToMouse(e));
+            }
+        }, { passive: false });
+        document.addEventListener('touchend', () => this.handleResizeEnd());
         
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => this.handleKeyDown(e));
     }
 
     async initializeAudioContext() {
-        if (this.audioContext) return;
-        
+        if (this.audioContext) {
+            // iOS Safari: always try to resume a suspended context on user gesture
+            if (this.audioContext.state === 'suspended') {
+                try { await this.audioContext.resume(); } catch (e) { /* ignore */ }
+            }
+            return;
+        }
+
         try {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            this.audioContext = new AudioCtx();
+
+            // iOS Safari requires resume() to be called from a user gesture handler.
+            // Some versions start in 'suspended' state and won't play until resumed.
             if (this.audioContext.state === 'suspended') {
                 await this.audioContext.resume();
             }
@@ -209,6 +235,16 @@ export class AudioChunkingEditor {
         } catch (error) {
             console.error('Audio context not supported:', error);
             throw error;
+        }
+    }
+
+    /**
+     * Ensures AudioContext is running. Must be called from user gesture handlers
+     * (click/touchend) on iOS Safari, which suspends contexts created outside gestures.
+     */
+    async ensureAudioContextResumed() {
+        if (this.audioContext && this.audioContext.state === 'suspended') {
+            try { await this.audioContext.resume(); } catch (e) { /* ignore */ }
         }
     }
     
@@ -569,14 +605,14 @@ export class AudioChunkingEditor {
     }
 
     updateMouseEventListeners() {
-        // Remove old listeners from waveform
+        // Remove old listeners from waveform (mouse)
         this.waveform.removeEventListener('mousedown', this.boundMouseDown);
         this.waveform.removeEventListener('mousemove', this.boundMouseMove);
         this.waveform.removeEventListener('mouseup', this.boundMouseUp);
         this.waveform.removeEventListener('mouseleave', this.boundMouseUp);
         this.waveform.removeEventListener('click', this.boundWaveformClick);
-        
-        // Remove old listeners from canvas
+
+        // Remove old listeners from canvas (mouse)
         this.canvas.removeEventListener('mousedown', this.boundMouseDown);
         this.canvas.removeEventListener('mousemove', this.boundMouseMove);
         this.canvas.removeEventListener('mouseup', this.boundMouseUp);
@@ -584,7 +620,17 @@ export class AudioChunkingEditor {
         this.canvas.removeEventListener('click', this.boundWaveformClick);
         this.canvas.removeEventListener('mousemove', this.boundHoverMove);
         this.canvas.removeEventListener('mouseleave', this.boundHoverLeave);
-        
+
+        // Remove old touch listeners from waveform and canvas
+        if (this.boundTouchStart) {
+            this.waveform.removeEventListener('touchstart', this.boundTouchStart);
+            this.waveform.removeEventListener('touchmove', this.boundTouchMove);
+            this.waveform.removeEventListener('touchend', this.boundTouchEnd);
+            this.canvas.removeEventListener('touchstart', this.boundTouchStart);
+            this.canvas.removeEventListener('touchmove', this.boundTouchMove);
+            this.canvas.removeEventListener('touchend', this.boundTouchEnd);
+        }
+
         // Create bound handlers if they don't exist
         if (!this.boundMouseDown) {
             this.boundMouseDown = (e) => this.handleMouseDown(e);
@@ -593,15 +639,23 @@ export class AudioChunkingEditor {
             this.boundWaveformClick = (e) => this.handleWaveformClick(e);
             this.boundHoverMove = (e) => this.handleHoverMove(e);
             this.boundHoverLeave = () => this.handleHoverLeave();
+            this.boundTouchStart = (e) => this.handleTouchStart(e);
+            this.boundTouchMove = (e) => this.handleTouchMove(e);
+            this.boundTouchEnd = (e) => this.handleTouchEnd(e);
         }
-        
+
         // Always add listeners to the canvas directly for better coordinate handling
         this.canvas.addEventListener('mousedown', this.boundMouseDown);
         this.canvas.addEventListener('mousemove', this.boundMouseMove);
         this.canvas.addEventListener('mouseup', this.boundMouseUp);
         this.canvas.addEventListener('mouseleave', this.boundMouseUp);
         this.canvas.addEventListener('click', this.boundWaveformClick);
-        
+
+        // Touch listeners on canvas (iOS Safari)
+        this.canvas.addEventListener('touchstart', this.boundTouchStart, { passive: false });
+        this.canvas.addEventListener('touchmove', this.boundTouchMove, { passive: false });
+        this.canvas.addEventListener('touchend', this.boundTouchEnd);
+
         // Add hover tracking listeners (separate from drag functionality)
         this.canvas.addEventListener('mousemove', this.boundHoverMove);
         this.canvas.addEventListener('mouseleave', this.boundHoverLeave);
@@ -877,6 +931,46 @@ export class AudioChunkingEditor {
         this.audioPlayer.pausedAtTime = this.seekPosition;
         
         console.log('Finished resizing selection');
+    }
+
+    // --- Touch event support (iOS Safari) ---
+
+    /**
+     * Converts a TouchEvent to a mouse-like object with clientX/clientY
+     * for reuse with existing mouse handlers.
+     */
+    _touchToMouse(touchEvent) {
+        const touch = touchEvent.touches[0] || touchEvent.changedTouches[0];
+        return { clientX: touch.clientX, clientY: touch.clientY, preventDefault() {}, stopPropagation() {} };
+    }
+
+    handleTouchStart(event) {
+        if (event.touches.length !== 1) return; // ignore multi-touch
+        event.preventDefault(); // prevent scroll/zoom on waveform
+        this.handleMouseDown(this._touchToMouse(event));
+    }
+
+    handleTouchMove(event) {
+        if (event.touches.length !== 1) return;
+        event.preventDefault();
+        this.handleMouseMove(this._touchToMouse(event));
+    }
+
+    handleTouchEnd(event) {
+        const mouseEvent = this._touchToMouse(event);
+        // If drag didn't start, simulate a click/tap for seek & chunk selection
+        if (this.isDragging && !this.dragStarted) {
+            this.handleMouseUp();
+            this.handleWaveformClick(mouseEvent);
+        } else {
+            this.handleMouseUp();
+        }
+    }
+
+    handleResizeTouchStart(event, handle) {
+        if (event.touches.length !== 1) return;
+        event.preventDefault();
+        this.handleResizeStart(this._touchToMouse(event), handle);
     }
 
     showResizeHandles() {
@@ -1390,10 +1484,9 @@ export class AudioChunkingEditor {
 
     async play() {
         if (this.audioPlayer.isPlaying) return;
-        
-        if (this.audioContext.state === 'suspended') {
-            await this.audioContext.resume();
-        }
+
+        // iOS Safari: resume context on every play (must happen in user gesture callstack)
+        await this.ensureAudioContextResumed();
         
         if (this.selection.start !== this.selection.end) {
             await this.audioPlayer.playSelection(this.audioBuffer, this.selection);
@@ -1560,11 +1653,11 @@ export class AudioChunkingEditor {
     }
 
     async initMp3Worker() {
-        if (this.mp3Worker || this.mp3WorkerReady) return;
+        if (this.mp3Worker || this.mp3WorkerReady || this.mp3MainThreadEncoder) return;
 
         try {
             this.mp3Worker = new Worker('js/workers/mp3-encoder-worker.js');
-            
+
             // Set up worker message handling
             this.mp3Worker.onmessage = (e) => this.handleMp3WorkerMessage(e);
             this.mp3Worker.onerror = (error) => {
@@ -1576,11 +1669,22 @@ export class AudioChunkingEditor {
             await this.sendMp3WorkerMessage('init');
             this.mp3WorkerReady = true;
             console.log('MP3 encoder worker initialized');
-            
+
         } catch (error) {
-            console.error('Failed to initialize MP3 worker:', error);
+            // Worker failed (common on iOS Safari with CDN importScripts).
+            // Fall back to main-thread encoding via Mp3Encoder.
+            console.warn('MP3 Worker unavailable, falling back to main-thread encoder:', error.message);
             this.mp3Worker = null;
             this.mp3WorkerReady = false;
+            try {
+                const { Mp3Encoder } = await import('./encoders/mp3.js');
+                this.mp3MainThreadEncoder = new Mp3Encoder();
+                await this.mp3MainThreadEncoder.init();
+                console.log('Main-thread MP3 encoder initialized (fallback)');
+            } catch (fallbackError) {
+                console.error('Main-thread MP3 encoder also failed:', fallbackError);
+                this.mp3MainThreadEncoder = null;
+            }
         }
     }
 
@@ -1789,21 +1893,30 @@ HELP:
             if (format === 'mp3') {
                 // MP3 Export
                 this.updateProgress(25);
-                
-                if (!this.mp3WorkerReady) {
+
+                if (!this.mp3WorkerReady && !this.mp3MainThreadEncoder) {
                     await this.initMp3Worker();
                 }
-                
-                // Use the passed bitrate parameter
-                const result = await this.sendMp3WorkerMessage('encode', {
-                    channels: audioChannels,
-                    sampleRate,
-                    bitrate
-                });
-                
+
+                let mp3Data;
+                if (this.mp3WorkerReady) {
+                    // Use Web Worker (preferred — non-blocking)
+                    const result = await this.sendMp3WorkerMessage('encode', {
+                        channels: audioChannels,
+                        sampleRate,
+                        bitrate
+                    });
+                    mp3Data = result.data;
+                } else if (this.mp3MainThreadEncoder) {
+                    // Fallback: main-thread encoding (iOS Safari when Worker fails)
+                    mp3Data = await this.mp3MainThreadEncoder.encode(audioChannels, sampleRate, bitrate);
+                } else {
+                    throw new Error('MP3 encoder is not available. Please try WAV export instead.');
+                }
+
                 this.updateProgress(90);
-                
-                blob = new Blob([result.data], { type: 'audio/mpeg' });
+
+                blob = new Blob([mp3Data], { type: 'audio/mpeg' });
                 mimeType = 'audio/mpeg';
                 
                 // Generate filename

@@ -89,15 +89,26 @@ export class AudioUtils {
      */
     static downloadBlob(blob, filename) {
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        
-        // Cleanup
-        setTimeout(() => URL.revokeObjectURL(url), 100);
+
+        // iOS Safari does not support the download attribute on <a> elements.
+        // Detect iOS/iPadOS and fall back to window.open.
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+        if (isIOS) {
+            // window.open works on iOS Safari for blob URLs
+            window.open(url, '_blank');
+            // Give iOS time to start the download before revoking
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        } else {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
     }
 
     /**
