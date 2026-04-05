@@ -9,6 +9,15 @@ let Mp3Encoder;
 // Track encoder instance
 let encoder = null;
 
+// Global error handler for uncaught worker errors
+self.onerror = function(error) {
+    postMessage({
+        type: 'error',
+        error: `Worker error: ${error.message || 'Unknown error'}`,
+        success: false
+    });
+};
+
 // Message handler
 self.onmessage = async function(e) {
     const { type, id, ...data } = e.data;

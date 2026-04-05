@@ -235,6 +235,7 @@ export class AudioChunkingEditor {
             console.log('AudioContext initialized:', this.audioContext.state);
         } catch (error) {
             console.error('Audio context not supported:', error);
+            toast('Your browser does not support audio processing. Please try a modern browser.', 'error');
             throw error;
         }
     }
@@ -272,12 +273,18 @@ export class AudioChunkingEditor {
     }
 
     async handleFile(file) {
-        if (!file.type.startsWith('audio/')) {
-            toast('Please select an audio file', 'warning');
+        if (!file.type.startsWith('audio/') && !file.name.match(/\.(wav|mp3|ogg|flac|aac|m4a|wma|webm)$/i)) {
+            toast('Unsupported file type. Please select a WAV, MP3, or OGG audio file.', 'warning');
             // Reset upload area to full size for invalid files
             this.uploadArea.classList.remove('compact');
             this.resetUploadText();
             return;
+        }
+
+        // Warn for very large files (>500MB) that may cause browser memory issues
+        const MAX_FILE_SIZE = 500 * 1024 * 1024;
+        if (file.size > MAX_FILE_SIZE) {
+            toast('This file is very large and may cause performance issues or crash the browser.', 'warning');
         }
         
         // Clear existing waveform and audio when loading new file
@@ -1438,33 +1445,39 @@ export class AudioChunkingEditor {
 
     deleteAudioRange(startTime, endTime) {
         if (!this.audioBuffer) return;
-        
-        const sampleRate = this.audioBuffer.sampleRate;
-        const channels = this.audioBuffer.numberOfChannels;
-        
-        const startSample = Math.floor(startTime * sampleRate);
-        const endSample = Math.floor(endTime * sampleRate);
-        const samplesToDelete = endSample - startSample;
-        
-        const newLength = this.audioBuffer.length - samplesToDelete;
-        const newBuffer = this.audioContext.createBuffer(channels, newLength, sampleRate);
-        
-        for (let channel = 0; channel < channels; channel++) {
-            const oldData = this.audioBuffer.getChannelData(channel);
-            const newData = newBuffer.getChannelData(channel);
-            
-            // Copy before deleted range
-            for (let i = 0; i < startSample; i++) {
-                newData[i] = oldData[i];
+
+        try {
+            const sampleRate = this.audioBuffer.sampleRate;
+            const channels = this.audioBuffer.numberOfChannels;
+
+            const startSample = Math.floor(startTime * sampleRate);
+            const endSample = Math.floor(endTime * sampleRate);
+            const samplesToDelete = endSample - startSample;
+
+            const newLength = this.audioBuffer.length - samplesToDelete;
+            const newBuffer = this.audioContext.createBuffer(channels, newLength, sampleRate);
+
+            for (let channel = 0; channel < channels; channel++) {
+                const oldData = this.audioBuffer.getChannelData(channel);
+                const newData = newBuffer.getChannelData(channel);
+
+                // Copy before deleted range
+                for (let i = 0; i < startSample; i++) {
+                    newData[i] = oldData[i];
+                }
+
+                // Copy after deleted range
+                for (let i = endSample; i < oldData.length; i++) {
+                    newData[i - samplesToDelete] = oldData[i];
+                }
             }
-            
-            // Copy after deleted range
-            for (let i = endSample; i < oldData.length; i++) {
-                newData[i - samplesToDelete] = oldData[i];
-            }
+
+            this.audioBuffer = newBuffer;
+        } catch (error) {
+            console.error('Delete audio range error:', error);
+            toast('Failed to delete audio range. The operation may require too much memory.', 'error');
+            return;
         }
-        
-        this.audioBuffer = newBuffer;
         this.chunkManager.deleteTimeRange(startTime, endTime);
         this.waveformRenderer.chunks = this.chunkManager.chunks;
         
@@ -1486,20 +1499,27 @@ export class AudioChunkingEditor {
     async play() {
         if (this.audioPlayer.isPlaying) return;
 
-        // iOS Safari: resume context on every play (must happen in user gesture callstack)
-        await this.ensureAudioContextResumed();
-        
-        if (this.selection.start !== this.selection.end) {
-            await this.audioPlayer.playSelection(this.audioBuffer, this.selection);
-        } else if (this.chunkManager.selectedChunk) {
-            await this.audioPlayer.playChunk(this.audioBuffer, this.chunkManager.selectedChunk);
-        } else {
-            await this.audioPlayer.playAllChunks(this.audioBuffer, this.chunkManager.chunks);
+        try {
+            // iOS Safari: resume context on every play (must happen in user gesture callstack)
+            await this.ensureAudioContextResumed();
+
+            if (this.selection.start !== this.selection.end) {
+                await this.audioPlayer.playSelection(this.audioBuffer, this.selection);
+            } else if (this.chunkManager.selectedChunk) {
+                await this.audioPlayer.playChunk(this.audioBuffer, this.chunkManager.selectedChunk);
+            } else {
+                await this.audioPlayer.playAllChunks(this.audioBuffer, this.chunkManager.chunks);
+            }
+
+            this.playBtn.textContent = '⏸︎';
+            this.playBtn.setAttribute('data-pause', 'true');
+            this.animateProgress();
+        } catch (error) {
+            console.error('Playback error:', error);
+            toast('Playback failed. Try reloading the audio file.', 'error');
+            this.playBtn.textContent = '▷';
+            this.playBtn.removeAttribute('data-pause');
         }
-        
-        this.playBtn.textContent = '⏸︎';
-        this.playBtn.setAttribute('data-pause', 'true');
-        this.animateProgress();
     }
 
     togglePlayPause() {
@@ -1646,6 +1666,7 @@ export class AudioChunkingEditor {
             await this.exportAudio(format, bitrate);
         } catch (error) {
             console.error('Export failed:', error);
+            toast('Export failed. Please try again or use a different format.', 'error');
         } finally {
             // Re-enable export button
             this.exportConfirm.disabled = false;
@@ -1664,6 +1685,7 @@ export class AudioChunkingEditor {
             this.mp3Worker.onerror = (error) => {
                 console.error('MP3 Worker error:', error);
                 this.mp3WorkerReady = false;
+                toast('MP3 encoder encountered an error. Try exporting as WAV instead.', 'error');
             };
 
             // Initialize the worker
@@ -1685,6 +1707,7 @@ export class AudioChunkingEditor {
             } catch (fallbackError) {
                 console.error('Main-thread MP3 encoder also failed:', fallbackError);
                 this.mp3MainThreadEncoder = null;
+                toast('MP3 encoding is not available. You can still export as WAV.', 'warning');
             }
         }
     }
@@ -1730,6 +1753,7 @@ export class AudioChunkingEditor {
             case 'error':
                 console.error('MP3 encoding error:', e.data.error);
                 this.hideEncodingProgress();
+                toast('MP3 encoding failed. Try exporting as WAV instead.', 'error');
                 break;
         }
     }
@@ -2206,31 +2230,37 @@ export class AudioChunkingEditor {
     applySilenceEffect(startTime, endTime) {
         if (!this.audioBuffer) return;
 
-        const sampleRate = this.audioBuffer.sampleRate;
-        const channels = this.audioBuffer.numberOfChannels;
-        const startSample = Math.floor(startTime * sampleRate);
-        const endSample = Math.floor(endTime * sampleRate);
+        try {
+            const sampleRate = this.audioBuffer.sampleRate;
+            const channels = this.audioBuffer.numberOfChannels;
+            const startSample = Math.floor(startTime * sampleRate);
+            const endSample = Math.floor(endTime * sampleRate);
 
-        // Create new buffer with same properties
-        const newBuffer = this.audioContext.createBuffer(channels, this.audioBuffer.length, sampleRate);
+            // Create new buffer with same properties
+            const newBuffer = this.audioContext.createBuffer(channels, this.audioBuffer.length, sampleRate);
 
-        // Copy all audio data first
-        for (let channel = 0; channel < channels; channel++) {
-            const oldData = this.audioBuffer.getChannelData(channel);
-            const newData = newBuffer.getChannelData(channel);
-            
-            // Copy all samples
-            for (let i = 0; i < oldData.length; i++) {
-                newData[i] = oldData[i];
+            // Copy all audio data first
+            for (let channel = 0; channel < channels; channel++) {
+                const oldData = this.audioBuffer.getChannelData(channel);
+                const newData = newBuffer.getChannelData(channel);
+
+                // Copy all samples
+                for (let i = 0; i < oldData.length; i++) {
+                    newData[i] = oldData[i];
+                }
+
+                // Apply silence to the selected region (set to zero)
+                for (let i = startSample; i < endSample; i++) {
+                    newData[i] = 0;
+                }
             }
 
-            // Apply silence to the selected region (set to zero)
-            for (let i = startSample; i < endSample; i++) {
-                newData[i] = 0;
-            }
+            this.audioBuffer = newBuffer;
+        } catch (error) {
+            console.error('Silence effect error:', error);
+            toast('Failed to apply silence effect. The file may be too large.', 'error');
+            return;
         }
-
-        this.audioBuffer = newBuffer;
         this.waveformRenderer.generateWaveform(this.audioBuffer);
         
         // Clear selection after applying silence
@@ -2265,46 +2295,52 @@ export class AudioChunkingEditor {
     applyFadeEffect(startTime, endTime, type) {
         if (!this.audioBuffer) return;
 
-        const sampleRate = this.audioBuffer.sampleRate;
-        const channels = this.audioBuffer.numberOfChannels;
-        const startSample = Math.floor(startTime * sampleRate);
-        const endSample = Math.floor(endTime * sampleRate);
-        const fadeLength = endSample - startSample;
+        try {
+            const sampleRate = this.audioBuffer.sampleRate;
+            const channels = this.audioBuffer.numberOfChannels;
+            const startSample = Math.floor(startTime * sampleRate);
+            const endSample = Math.floor(endTime * sampleRate);
+            const fadeLength = endSample - startSample;
 
-        // Create new buffer with same properties
-        const newBuffer = this.audioContext.createBuffer(channels, this.audioBuffer.length, sampleRate);
+            // Create new buffer with same properties
+            const newBuffer = this.audioContext.createBuffer(channels, this.audioBuffer.length, sampleRate);
 
-        // Copy all audio data first
-        for (let channel = 0; channel < channels; channel++) {
-            const oldData = this.audioBuffer.getChannelData(channel);
-            const newData = newBuffer.getChannelData(channel);
-            
-            // Copy all samples
-            for (let i = 0; i < oldData.length; i++) {
-                newData[i] = oldData[i];
-            }
+            // Copy all audio data first
+            for (let channel = 0; channel < channels; channel++) {
+                const oldData = this.audioBuffer.getChannelData(channel);
+                const newData = newBuffer.getChannelData(channel);
 
-            // Apply fade effect to the selected region
-            for (let i = startSample; i < endSample; i++) {
-                const fadeProgress = (i - startSample) / fadeLength;
-                let fadeMultiplier;
-
-                if (type === 'in') {
-                    // Fade in: start at 0, end at 1
-                    fadeMultiplier = fadeProgress;
-                } else {
-                    // Fade out: start at 1, end at 0
-                    fadeMultiplier = 1 - fadeProgress;
+                // Copy all samples
+                for (let i = 0; i < oldData.length; i++) {
+                    newData[i] = oldData[i];
                 }
 
-                // Apply smooth curve (cosine interpolation)
-                fadeMultiplier = 0.5 * (1 - Math.cos(fadeMultiplier * Math.PI));
-                
-                newData[i] = oldData[i] * fadeMultiplier;
-            }
-        }
+                // Apply fade effect to the selected region
+                for (let i = startSample; i < endSample; i++) {
+                    const fadeProgress = (i - startSample) / fadeLength;
+                    let fadeMultiplier;
 
-        this.audioBuffer = newBuffer;
+                    if (type === 'in') {
+                        // Fade in: start at 0, end at 1
+                        fadeMultiplier = fadeProgress;
+                    } else {
+                        // Fade out: start at 1, end at 0
+                        fadeMultiplier = 1 - fadeProgress;
+                    }
+
+                    // Apply smooth curve (cosine interpolation)
+                    fadeMultiplier = 0.5 * (1 - Math.cos(fadeMultiplier * Math.PI));
+
+                    newData[i] = oldData[i] * fadeMultiplier;
+                }
+            }
+
+            this.audioBuffer = newBuffer;
+        } catch (error) {
+            console.error('Fade effect error:', error);
+            toast(`Failed to apply fade ${type} effect. The file may be too large.`, 'error');
+            return;
+        }
         this.waveformRenderer.generateWaveform(this.audioBuffer);
         
         // Clear selection after applying fade
@@ -2339,7 +2375,13 @@ export class AudioChunkingEditor {
     applyNormalizeEffect(startTime, endTime) {
         if (!this.audioBuffer) return;
 
-        this.audioBuffer = AudioUtils.normalizeAudio(this.audioBuffer, startTime, endTime, this.audioContext, -0.5);
+        try {
+            this.audioBuffer = AudioUtils.normalizeAudio(this.audioBuffer, startTime, endTime, this.audioContext, -0.5);
+        } catch (error) {
+            console.error('Normalize effect error:', error);
+            toast('Failed to apply normalize effect. The file may be too large.', 'error');
+            return;
+        }
         this.waveformRenderer.generateWaveform(this.audioBuffer);
         
         // Clear selection after applying normalize

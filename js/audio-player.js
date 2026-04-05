@@ -54,9 +54,13 @@ export class AudioPlayer {
     async playSelection(audioBuffer, selection) {
         const startTime = Math.min(selection.start, selection.end);
         const endTime = Math.max(selection.start, selection.end);
-        
+
+        if (endTime - startTime <= 0) {
+            throw new Error('Invalid selection range');
+        }
+
         this.source = this.audioContext.createBufferSource();
-        
+
         // Create a buffer for just the selection
         const duration = endTime - startTime;
         const sampleRate = audioBuffer.sampleRate;
@@ -64,19 +68,23 @@ export class AudioPlayer {
         const startFrame = Math.floor(startTime * sampleRate);
         const endFrame = Math.floor(endTime * sampleRate);
         const frameCount = endFrame - startFrame;
-        
+
+        if (frameCount <= 0) {
+            throw new Error('Selection too short to play');
+        }
+
         const selectionBuffer = this.audioContext.createBuffer(channels, frameCount, sampleRate);
-        
+
         // Copy audio data for the selection
         for (let channel = 0; channel < channels; channel++) {
             const oldData = audioBuffer.getChannelData(channel);
             const newData = selectionBuffer.getChannelData(channel);
-            
+
             for (let i = 0; i < frameCount; i++) {
                 newData[i] = oldData[startFrame + i] || 0;
             }
         }
-        
+
         this.source.buffer = selectionBuffer;
         this.source.connect(this.audioContext.destination);
         
@@ -119,6 +127,10 @@ export class AudioPlayer {
      * @param {object} chunk - Chunk object with start and end times
      */
     async playChunk(audioBuffer, chunk) {
+        if (!chunk || chunk.end <= chunk.start) {
+            throw new Error('Invalid chunk');
+        }
+
         this.source = this.audioContext.createBufferSource();
         const chunkBuffer = this.createChunkBuffer(audioBuffer, chunk);
         this.source.buffer = chunkBuffer;
@@ -291,21 +303,25 @@ export class AudioPlayer {
     createChunkBuffer(audioBuffer, chunk) {
         const sampleRate = audioBuffer.sampleRate;
         const channels = audioBuffer.numberOfChannels;
-        const startFrame = Math.floor(chunk.start * sampleRate);
-        const endFrame = Math.floor(chunk.end * sampleRate);
+        const startFrame = Math.max(0, Math.floor(chunk.start * sampleRate));
+        const endFrame = Math.min(audioBuffer.length, Math.floor(chunk.end * sampleRate));
         const frameCount = endFrame - startFrame;
-        
+
+        if (frameCount <= 0) {
+            throw new Error('Invalid chunk range');
+        }
+
         const chunkBuffer = this.audioContext.createBuffer(channels, frameCount, sampleRate);
-        
+
         for (let channel = 0; channel < channels; channel++) {
             const oldData = audioBuffer.getChannelData(channel);
             const newData = chunkBuffer.getChannelData(channel);
-            
+
             for (let i = 0; i < frameCount; i++) {
                 newData[i] = oldData[startFrame + i] || 0;
             }
         }
-        
+
         return chunkBuffer;
     }
 

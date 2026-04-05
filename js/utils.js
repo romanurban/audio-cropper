@@ -41,8 +41,13 @@ export class AudioUtils {
         const byteRate = sampleRate * blockAlign;
         const dataSize = length * blockAlign;
         const fileSize = 44 + dataSize;
-        
-        const arrayBuffer = new ArrayBuffer(fileSize);
+
+        let arrayBuffer;
+        try {
+            arrayBuffer = new ArrayBuffer(fileSize);
+        } catch (error) {
+            throw new Error(`Not enough memory to create WAV file (${(fileSize / 1024 / 1024).toFixed(1)} MB needed)`);
+        }
         const view = new DataView(arrayBuffer);
         
         // Helper function to write string to DataView

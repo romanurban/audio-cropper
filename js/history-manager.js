@@ -157,20 +157,27 @@ export class HistoryManager {
      * @returns {AudioBuffer} Copy of the audio buffer
      */
     copyAudioBuffer(original) {
-        const copy = this.audioContext.createBuffer(
-            original.numberOfChannels,
-            original.length,
-            original.sampleRate
-        );
+        try {
+            const copy = this.audioContext.createBuffer(
+                original.numberOfChannels,
+                original.length,
+                original.sampleRate
+            );
 
-        // Copy channel data
-        for (let channel = 0; channel < original.numberOfChannels; channel++) {
-            const originalData = original.getChannelData(channel);
-            const copyData = copy.getChannelData(channel);
-            copyData.set(originalData);
+            // Copy channel data
+            for (let channel = 0; channel < original.numberOfChannels; channel++) {
+                const originalData = original.getChannelData(channel);
+                const copyData = copy.getChannelData(channel);
+                copyData.set(originalData);
+            }
+
+            return copy;
+        } catch (error) {
+            console.warn('Failed to copy audio buffer for history (memory limit):', error.message);
+            // Return the original reference as fallback - undo may not work perfectly
+            // but at least the app won't crash
+            return original;
         }
-
-        return copy;
     }
 
     /**
