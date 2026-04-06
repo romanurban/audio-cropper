@@ -2261,35 +2261,7 @@ export class AudioChunkingEditor {
             toast('Failed to apply silence effect. The file may be too large.', 'error');
             return;
         }
-        this.waveformRenderer.generateWaveform(this.audioBuffer);
-        
-        // Clear selection after applying silence
-        this.selection.start = 0;
-        this.selection.end = 0;
-        this.selectionDiv.style.display = 'none';
-        
-        // Clear chunk selection after applying silence
-        this.chunkManager.selectedChunk = null;
-        this.chunkManager.updateChunkOverlays();
-        
-        // Hide resize handles and clear timeout
-        this.hideResizeHandles();
-        if (this.resizeHandleTimeout) {
-            clearTimeout(this.resizeHandleTimeout);
-            this.resizeHandleTimeout = null;
-        }
-        
-        this.updateSelectionInfo();
-        this.updateSelectionDuration();
-        this.updateSelectionClock();
-        this.updateDeleteButton();
-        this.updateFadeButtons();
-        this.updateSilenceButton();
-        this.updateSilenceButton();
-        this.updateChunkInfo();
-        
-        // Save state to history
-        this.saveCurrentState('Apply silence effect');
+        this.finalizeEffect('Apply silence effect');
     }
 
     applyFadeEffect(startTime, endTime, type) {
@@ -2341,35 +2313,7 @@ export class AudioChunkingEditor {
             toast(`Failed to apply fade ${type} effect. The file may be too large.`, 'error');
             return;
         }
-        this.waveformRenderer.generateWaveform(this.audioBuffer);
-        
-        // Clear selection after applying fade
-        this.selection.start = 0;
-        this.selection.end = 0;
-        this.selectionDiv.style.display = 'none';
-        
-        // Clear chunk selection after applying fade
-        this.chunkManager.selectedChunk = null;
-        this.chunkManager.updateChunkOverlays();
-        
-        // Hide resize handles and clear timeout
-        this.hideResizeHandles();
-        if (this.resizeHandleTimeout) {
-            clearTimeout(this.resizeHandleTimeout);
-            this.resizeHandleTimeout = null;
-        }
-        
-        this.updateSelectionInfo();
-        this.updateSelectionDuration();
-        this.updateSelectionClock();
-        this.updateDeleteButton();
-        this.updateFadeButtons();
-        this.updateSilenceButton();
-        this.updateSilenceButton();
-        this.updateChunkInfo();
-        
-        // Save state to history
-        this.saveCurrentState(`Apply fade ${type} effect`);
+        this.finalizeEffect(`Apply fade ${type} effect`);
     }
 
     applyNormalizeEffect(startTime, endTime) {
@@ -2382,24 +2326,28 @@ export class AudioChunkingEditor {
             toast('Failed to apply normalize effect. The file may be too large.', 'error');
             return;
         }
+        this.finalizeEffect('Apply normalize effect');
+    }
+
+    finalizeEffect(historyLabel) {
         this.waveformRenderer.generateWaveform(this.audioBuffer);
-        
-        // Clear selection after applying normalize
+
+        // Clear selection
         this.selection.start = 0;
         this.selection.end = 0;
         this.selectionDiv.style.display = 'none';
-        
-        // Clear chunk selection after applying normalize
+
+        // Clear chunk selection
         this.chunkManager.selectedChunk = null;
         this.chunkManager.updateChunkOverlays();
-        
-        // Hide resize handles and clear timeout
+
+        // Hide resize handles
         this.hideResizeHandles();
         if (this.resizeHandleTimeout) {
             clearTimeout(this.resizeHandleTimeout);
             this.resizeHandleTimeout = null;
         }
-        
+
         this.updateSelectionInfo();
         this.updateSelectionDuration();
         this.updateSelectionClock();
@@ -2408,9 +2356,8 @@ export class AudioChunkingEditor {
         this.updateNormalizeButton();
         this.updateSilenceButton();
         this.updateChunkInfo();
-        
-        // Save state to history
-        this.saveCurrentState('Apply normalize effect');
+
+        this.saveCurrentState(historyLabel);
     }
 
     updateFadeButtons() {

@@ -160,7 +160,8 @@ audio-cropper/
 │   ├── audio-player.js      # Audio playback
 │   ├── utils.js        # Utility functions
 │   ├── encoders/
-│   │   └── mp3.js      # MP3 encoder wrapper
+│   │   ├── mp3.js      # MP3 encoder wrapper (main-thread fallback)
+│   │   └── mp3-core.js # Shared encoding algorithm (non-module)
 │   └── workers/
 │       └── mp3-encoder-worker.js # MP3 encoding Web Worker
 ├── samples/
@@ -255,6 +256,7 @@ audio-cropper/
 
 ### Architecture
 - **lamejs Library**: Uses lamejs (JavaScript port of LAME) for MP3 encoding
+- **Shared Core**: Encoding algorithm lives in `js/encoders/mp3-core.js` (non-module), used by both the worker and the main-thread fallback to avoid duplication
 - **Web Worker**: MP3 encoding runs in a separate thread to prevent UI blocking
 - **Progressive Encoding**: Processes audio in chunks with progress reporting
 - **Memory Efficient**: Streams encoded data to avoid large peak memory usage
